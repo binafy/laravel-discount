@@ -21,5 +21,7 @@
             "homepage": "https://github.com/binafy"
         }
     ],
-    "require": {}
+    "require": {
+        "php": "^8.0"
+    }
 }
