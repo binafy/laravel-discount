@@ -1,0 +1,20 @@
+{
+    "name": "binafy/laravel-discount",
+    "type": "library",
+    "license": "MIT",
+    "minimum-stability": "dev",
+    "autoload": {
+        "psr-4": {
+            "Binafy\\LaravelDiscount\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "milwad khosravi",
+            "email": "milwad.dev@gmail.com",
+            "homepage": "https://github.com/milwad-dev",
+            "role": "Developer"
+        }
+    ],
+    "require": {}
+}
