@@ -14,6 +14,11 @@
             "email": "milwad.dev@gmail.com",
             "homepage": "https://github.com/milwad-dev",
             "role": "Developer"
+        },
+        {
+            "name": "binafy",
+            "role": "owner",
+            "homepage": "https://github.com/binafy"
         }
     ],
     "require": {}
