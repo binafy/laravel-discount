@@ -35,5 +35,10 @@
                 "Binafy\\LaravelDiscount\\Providers\\LaravelDiscountServiceProvider"
             ]
         }
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
     }
 }
