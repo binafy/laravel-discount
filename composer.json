@@ -3,11 +3,6 @@
     "type": "library",
     "license": "MIT",
     "minimum-stability": "dev",
-    "autoload": {
-        "psr-4": {
-            "Binafy\\LaravelDiscount\\": "src/"
-        }
-    },
     "authors": [
         {
             "name": "milwad khosravi",
@@ -21,6 +16,11 @@
             "homepage": "https://github.com/binafy"
         }
     ],
+    "autoload": {
+        "psr-4": {
+            "Binafy\\LaravelDiscount\\": "src/"
+        }
+    },
     "require": {
         "php": "^8.0"
     }
