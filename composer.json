@@ -5,13 +5,13 @@
     "minimum-stability": "dev",
     "authors": [
         {
-            "name": "milwad khosravi",
+            "name": "Milwad Khosravi",
             "email": "milwad.dev@gmail.com",
-            "homepage": "https://github.com/milwad-dev",
-            "role": "Developer"
+            "role": "author",
+            "homepage": "https://github.com/milwad-dev"
         },
         {
-            "name": "binafy",
+            "name": "Binafy",
             "role": "owner",
             "homepage": "https://github.com/binafy"
         }
@@ -23,11 +23,11 @@
     },
     "require": {
         "php": "^8.0",
-        "laravel/framework": "^9.0|^10.0|^11.0"
+        "laravel/framework": "^9.0|^10.0|^11.0|^12.0"
     },
     "require-dev": {
-        "pestphp/pest-plugin-laravel": "^1.4.0|^2.0.0",
-        "orchestra/testbench": "^7.0|^8.0|^9.0"
+        "pestphp/pest-plugin-laravel": "^1.4.0|^2.0.0|^3.0.0",
+        "orchestra/testbench": "^7.0|^8.0|^9.0|^10.0"
     },
     "extra": {
         "laravel": {
