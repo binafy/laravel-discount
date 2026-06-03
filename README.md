@@ -13,4 +13,5 @@ The `Laravel-Discount` is a Laravel package designed to handle discounts in your
 - Expiry Dates: Set expiration dates for discounts to create time-limited offers.
 - Usage Limits: Restrict the number of times a discount can be used.
 - Stackable Discounts: Allow multiple discounts to be applied simultaneously or restrict stacking.
+- Support [Laravel Cart](https://github.com/binafy/laravel-cart)
 - Detailed Documentation: Comprehensive guides and examples to help you get started quickly.
