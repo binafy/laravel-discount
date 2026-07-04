@@ -6,13 +6,14 @@ return [
     | Users Table
     |--------------------------------------------------------------------------
     |
-    | The table that holds your application's users. The `discount_usages`
+    | The table and model of your application's users. The `discount_usages`
     | table defines a foreign key to this table so redemptions can be
     | tracked per user and per-user usage limits can be enforced.
     |
     */
     'users' => [
         'table' => 'users',
+        'model' => \App\Models\User::class,
     ],
 
     /*
