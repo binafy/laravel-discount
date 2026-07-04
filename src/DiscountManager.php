@@ -3,6 +3,9 @@
 namespace Binafy\LaravelDiscount;
 
 use Binafy\LaravelDiscount\Enums\DiscountType;
+use Binafy\LaravelDiscount\Events\DiscountApplied;
+use Binafy\LaravelDiscount\Events\DiscountExpired;
+use Binafy\LaravelDiscount\Events\DiscountRedeemed;
 use Binafy\LaravelDiscount\Exceptions\DiscountException;
 use Binafy\LaravelDiscount\Exceptions\DiscountExpiredException;
 use Binafy\LaravelDiscount\Exceptions\DiscountNotActiveException;
@@ -51,6 +54,8 @@ class DiscountManager
         }
 
         if ($discount->isExpired()) {
+            DiscountExpired::dispatch($discount);
+
             throw DiscountExpiredException::for($discount);
         }
 
@@ -143,11 +148,15 @@ class DiscountManager
     {
         $this->validate($discount, $amount, $user);
 
-        return new DiscountResult(
+        $result = new DiscountResult(
             collect([$discount]),
             $amount,
             $this->calculate($discount, $amount)
         );
+
+        DiscountApplied::dispatch($result, $user);
+
+        return $result;
     }
 
     /**
@@ -174,29 +183,27 @@ class DiscountManager
         )->first();
         $bestSoloAmount = $bestSolo ? $this->calculate($bestSolo, $amount) : 0.0;
 
-        if ($stackable->isNotEmpty() && $stackTotal >= $bestSoloAmount) {
-            return new DiscountResult($stackable->values(), $amount, $stackTotal);
+        $result = $stackable->isNotEmpty() && $stackTotal >= $bestSoloAmount
+            ? new DiscountResult($stackable->values(), $amount, $stackTotal)
+            : new DiscountResult(collect($bestSolo ? [$bestSolo] : []), $amount, $bestSoloAmount);
+
+        if ($result->discounts->isNotEmpty()) {
+            DiscountApplied::dispatch($result, $user);
         }
 
-        return new DiscountResult(
-            collect($bestSolo ? [$bestSolo] : []),
-            $amount,
-            $bestSoloAmount
-        );
+        return $result;
     }
 
     /**
      * Record a redemption: create a usage row and increment `used_count`.
      * The increment is guarded by the usage limit at the query level, so
      * concurrent redemptions cannot exceed the limit (no race condition).
-     *
-     * @throws DiscountUsageLimitReachedException
      */
     public function redeem(Discount $discount, Model|int $user, ?float $amount = null): DiscountUsage
     {
         $userId = $user instanceof Model ? $user->getKey() : $user;
 
-        return DB::transaction(function () use ($discount, $userId, $amount) {
+        $usage = DB::transaction(function () use ($discount, $userId, $amount) {
             if (! is_null($discount->usage_limit_per_user)) {
                 $used = DiscountUsage::query()
                     ->where('discount_id', $discount->getKey())
@@ -232,5 +239,9 @@ class DiscountManager
                 'used_at' => now(),
             ]);
         });
+
+        DiscountRedeemed::dispatch($discount, $usage);
+
+        return $usage;
     }
 }
