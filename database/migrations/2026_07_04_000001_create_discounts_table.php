@@ -1,5 +1,6 @@
 <?php
 
+use Binafy\LaravelDiscount\Enums\DiscountType;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -17,7 +18,7 @@ return new class extends Migration
             $table->string('name')->nullable();
             $table->text('description')->nullable();
             $table->string('code')->nullable()->unique();
-            $table->enum('type', ['percentage', 'fixed'])->default('percentage');
+            $table->enum('type', DiscountType::values())->default(DiscountType::Percentage->value);
             $table->decimal('value', 10, 2);
             $table->decimal('min_order_value', 15, 2)->nullable();
             $table->json('conditions')->nullable();
