@@ -41,6 +41,7 @@ The `Laravel-Discount` is a Laravel package designed to handle discounts in your
   - [Validation & Exceptions](#validation--exceptions)
   - [Events](#events)
   - [Laravel Cart Integration](#laravel-cart-integration)
+  - [Artisan Commands](#artisan-commands)
 - [Testing](#testing)
 - [Contributors](#contributors)
 - [Security](#security)
@@ -362,6 +363,29 @@ $result = $cartDiscount->applyItemDiscounts($cart);
 ```
 
 The cart total is checked against `min_order_value`, and the cart's user is used for per-user usage limits automatically.
+
+<a name="artisan-commands"></a>
+### Artisan Commands
+
+Generate unique discount codes from the command line:
+
+```bash
+php artisan discount:generate                    # one code
+php artisan discount:generate 100 --prefix=VIP  # 100 codes like VIP-8FJ2K9QW
+```
+
+Delete expired discounts (their usage records are removed with them):
+
+```bash
+php artisan discount:prune            # everything already expired
+php artisan discount:prune --days=30  # only discounts expired 30+ days ago
+```
+
+`discount:prune` works well as a [scheduled task](https://laravel.com/docs/scheduling):
+
+```php
+Schedule::command('discount:prune --days=30')->daily();
+```
 
 <a name="testing"></a>
 ## Testing
