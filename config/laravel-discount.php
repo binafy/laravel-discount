@@ -57,4 +57,23 @@ return [
     'discountables' => [
         'table' => 'discountables',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Code Generation
+    |--------------------------------------------------------------------------
+    |
+    | Defaults used by the discount code generator. `length` is the number
+    | of random characters, drawn from `characters` (ambiguous characters
+    | such as 0/O and 1/I are excluded by default). When a `prefix` is
+    | set, it is prepended to every code using the `separator`,
+    | e.g. "SUMMER-8FJ2K9QW".
+    |
+    */
+    'codes' => [
+        'length' => 8,
+        'characters' => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789',
+        'prefix' => null,
+        'separator' => '-',
+    ],
 ];
