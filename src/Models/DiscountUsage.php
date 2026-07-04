@@ -8,7 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * @property int $id
  * @property int $discount_id
- * @property int $user_id
+ * @property int|null $user_id Null for guest redemptions.
+ * @property string|null $session_id Set for guest redemptions.
  * @property string|null $amount
  * @property \Illuminate\Support\Carbon $used_at
  * @property \Illuminate\Support\Carbon|null $created_at
@@ -26,6 +27,7 @@ class DiscountUsage extends Model
     protected $fillable = [
         'discount_id',
         'user_id',
+        'session_id',
         'amount',
         'used_at',
     ];

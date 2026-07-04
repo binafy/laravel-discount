@@ -43,7 +43,7 @@ class DiscountManager
      *
      * @throws DiscountException
      */
-    public function validate(Discount $discount, float $orderAmount = 0, Model|int|null $user = null): void
+    public function validate(Discount $discount, float $orderAmount = 0, Model|int|null $user = null, ?string $sessionId = null): void
     {
         if (! $discount->is_active) {
             throw DiscountNotActiveException::for($discount);
@@ -63,10 +63,8 @@ class DiscountManager
             throw DiscountUsageLimitReachedException::for($discount);
         }
 
-        if (! is_null($user) && ! is_null($discount->usage_limit_per_user)) {
-            $userId = $user instanceof Model ? $user->getKey() : $user;
-
-            $used = $discount->usages()->where('user_id', $userId)->count();
+        if (! is_null($discount->usage_limit_per_user) && (! is_null($user) || ! is_null($sessionId))) {
+            $used = $this->perUserUsagesQuery($discount, $user, $sessionId)->count();
 
             if ($used >= $discount->usage_limit_per_user) {
                 throw DiscountUsageLimitReachedException::for(
@@ -84,10 +82,10 @@ class DiscountManager
     /**
      * Determine if the discount is applicable, without throwing.
      */
-    public function isValid(Discount $discount, float $orderAmount = 0, Model|int|null $user = null): bool
+    public function isValid(Discount $discount, float $orderAmount = 0, Model|int|null $user = null, ?string $sessionId = null): bool
     {
         try {
-            $this->validate($discount, $orderAmount, $user);
+            $this->validate($discount, $orderAmount, $user, $sessionId);
 
             return true;
         } catch (DiscountException) {
@@ -116,9 +114,9 @@ class DiscountManager
      *
      * @throws DiscountException
      */
-    public function applyCode(string $code, float $amount, Model|int|null $user = null): DiscountResult
+    public function applyCode(string $code, float $amount, Model|int|null $user = null, ?string $sessionId = null): DiscountResult
     {
-        return $this->apply($this->findByCode($code), $amount, $user);
+        return $this->apply($this->findByCode($code), $amount, $user, $sessionId);
     }
 
     /**
@@ -144,9 +142,9 @@ class DiscountManager
      *
      * @throws DiscountException
      */
-    public function apply(Discount $discount, float $amount, Model|int|null $user = null): DiscountResult
+    public function apply(Discount $discount, float $amount, Model|int|null $user = null, ?string $sessionId = null): DiscountResult
     {
-        $this->validate($discount, $amount, $user);
+        $this->validate($discount, $amount, $user, $sessionId);
 
         $result = new DiscountResult(
             collect([$discount]),
@@ -165,10 +163,10 @@ class DiscountManager
      * and whichever combination saves the most wins. Invalid discounts
      * are silently skipped.
      */
-    public function applyMany(iterable $discounts, float $amount, Model|int|null $user = null): DiscountResult
+    public function applyMany(iterable $discounts, float $amount, Model|int|null $user = null, ?string $sessionId = null): DiscountResult
     {
         $valid = collect($discounts)->filter(
-            fn (Discount $discount) => $this->isValid($discount, $amount, $user)
+            fn (Discount $discount) => $this->isValid($discount, $amount, $user, $sessionId)
         );
 
         [$stackable, $solo] = $valid->partition(fn (Discount $discount) => $discount->is_stackable);
@@ -199,15 +197,13 @@ class DiscountManager
      * The increment is guarded by the usage limit at the query level, so
      * concurrent redemptions cannot exceed the limit (no race condition).
      */
-    public function redeem(Discount $discount, Model|int $user, ?float $amount = null): DiscountUsage
+    public function redeem(Discount $discount, Model|int|null $user = null, ?float $amount = null, ?string $sessionId = null): DiscountUsage
     {
         $userId = $user instanceof Model ? $user->getKey() : $user;
 
-        $usage = DB::transaction(function () use ($discount, $userId, $amount) {
-            if (! is_null($discount->usage_limit_per_user)) {
-                $used = DiscountUsage::query()
-                    ->where('discount_id', $discount->getKey())
-                    ->where('user_id', $userId)
+        $usage = DB::transaction(function () use ($discount, $userId, $amount, $sessionId) {
+            if (! is_null($discount->usage_limit_per_user) && (! is_null($userId) || ! is_null($sessionId))) {
+                $used = $this->perUserUsagesQuery($discount, $userId, $sessionId)
                     ->lockForUpdate()
                     ->count();
 
@@ -235,6 +231,7 @@ class DiscountManager
             return DiscountUsage::query()->create([
                 'discount_id' => $discount->getKey(),
                 'user_id' => $userId,
+                'session_id' => $sessionId,
                 'amount' => $amount,
                 'used_at' => now(),
             ]);
@@ -243,5 +240,20 @@ class DiscountManager
         DiscountRedeemed::dispatch($discount, $usage);
 
         return $usage;
+    }
+
+    /**
+     * Query the usages that count toward the per-user limit: by user id
+     * for authenticated users, or by session id for guests.
+     */
+    protected function perUserUsagesQuery(Discount $discount, Model|int|null $user, ?string $sessionId)
+    {
+        $query = DiscountUsage::query()->where('discount_id', $discount->getKey());
+
+        if (! is_null($user)) {
+            return $query->where('user_id', $user instanceof Model ? $user->getKey() : $user);
+        }
+
+        return $query->where('session_id', $sessionId);
     }
 }

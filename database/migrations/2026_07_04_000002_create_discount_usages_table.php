@@ -17,13 +17,16 @@ return new class extends Migration
                 ->constrained(config('laravel-discount.discounts.table', 'discounts'))
                 ->cascadeOnDelete();
             $table->foreignId('user_id')
+                ->nullable()
                 ->constrained(config('laravel-discount.users.table', 'users'))
                 ->cascadeOnDelete();
+            $table->string('session_id')->nullable();
             $table->decimal('amount', 15, 2)->nullable();
             $table->timestamp('used_at');
             $table->timestamps();
 
             $table->index(['discount_id', 'user_id']);
+            $table->index(['discount_id', 'session_id']);
         });
     }
 

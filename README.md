@@ -34,6 +34,7 @@ The `Laravel-Discount` is a Laravel package designed to handle discounts in your
   - [Expiry Dates & Time Windows](#expiry-dates--time-windows)
   - [Usage Limits](#usage-limits)
     - [Redeeming](#redeeming)
+    - [Guest Discounts](#guest-discounts)
   - [Conditional Discounts](#conditional-discounts)
     - [Minimum Order Value](#minimum-order-value)
     - [Attach Discounts to Models](#attach-discounts-to-models)
@@ -227,6 +228,19 @@ LaravelDiscount::redeem($discount, $user, $result->discountAmount);
 ```
 
 When the limit is exhausted, `DiscountUsageLimitReachedException` is thrown.
+
+<a name="guest-discounts"></a>
+#### Guest Discounts
+
+Guests (not-logged-in visitors) can use discounts too. Pass a session id instead of a user, and the per-user limit is enforced per session:
+
+```php
+$result = LaravelDiscount::applyCode('GUEST10', $total, sessionId: session()->getId());
+
+LaravelDiscount::redeem($discount, amount: $result->discountAmount, sessionId: session()->getId());
+```
+
+The `discount_usages.user_id` column is nullable — guest redemptions store the `session_id` instead.
 
 <a name="conditional-discounts"></a>
 ### Conditional Discounts

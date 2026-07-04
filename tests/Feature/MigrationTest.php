@@ -32,6 +32,7 @@ test('discount_usages table is created with expected columns', function () {
             'id',
             'discount_id',
             'user_id',
+            'session_id',
             'amount',
             'used_at',
         ]))->toBeTrue();
