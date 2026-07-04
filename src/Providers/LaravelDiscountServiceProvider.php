@@ -5,6 +5,7 @@ namespace Binafy\LaravelDiscount\Providers;
 use Binafy\LaravelDiscount\DiscountManager;
 use Binafy\LaravelDiscount\Integrations\LaravelCart\CartDiscount;
 use Binafy\LaravelDiscount\Support\DiscountCodeGenerator;
+use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 
 class LaravelDiscountServiceProvider extends ServiceProvider
@@ -23,6 +24,28 @@ class LaravelDiscountServiceProvider extends ServiceProvider
         // Optional binafy/laravel-cart integration
         if (class_exists(\Binafy\LaravelCart\Models\Cart::class)) {
             $this->app->singleton(CartDiscount::class);
+        }
+    }
+
+    /**
+     * Bootstrap any application services.
+     */
+    public function boot(): void
+    {
+        // Publish Config
+        $this->publishes([
+            __DIR__ . '/../../config/laravel-discount.php' => config_path('laravel-discount.php'),
+        ], 'laravel-discount-config');
+
+        // Publish Migrations
+        if (version_compare(Application::VERSION, '11.0.0', '<')) {
+            $this->publishes([
+                __DIR__ . '/../../database/migrations' => database_path('migrations'),
+            ], 'laravel-discount-migrations');
+        } else {
+            $this->publishesMigrations([
+                __DIR__ . '/../../database/migrations' => database_path('migrations'),
+            ], 'laravel-discount-migrations');
         }
     }
 }
