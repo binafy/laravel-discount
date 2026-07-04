@@ -40,19 +40,19 @@ class DiscountManager
     public function validate(Discount $discount, float $orderAmount = 0, Model|int|null $user = null): void
     {
         if (! $discount->is_active) {
-            throw new DiscountNotActiveException;
+            throw DiscountNotActiveException::for($discount);
         }
 
         if (! $discount->hasStarted()) {
-            throw new DiscountNotStartedException;
+            throw DiscountNotStartedException::for($discount);
         }
 
         if ($discount->isExpired()) {
-            throw new DiscountExpiredException;
+            throw DiscountExpiredException::for($discount);
         }
 
         if ($discount->usageLimitReached()) {
-            throw new DiscountUsageLimitReachedException;
+            throw DiscountUsageLimitReachedException::for($discount);
         }
 
         if (! is_null($user) && ! is_null($discount->usage_limit_per_user)) {
@@ -61,14 +61,15 @@ class DiscountManager
             $used = $discount->usages()->where('user_id', $userId)->count();
 
             if ($used >= $discount->usage_limit_per_user) {
-                throw new DiscountUsageLimitReachedException(
+                throw DiscountUsageLimitReachedException::for(
+                    $discount,
                     'The discount usage limit for this user has been reached.'
                 );
             }
         }
 
         if (! is_null($discount->min_order_value) && $orderAmount < (float) $discount->min_order_value) {
-            throw new MinimumOrderValueException;
+            throw MinimumOrderValueException::for($discount);
         }
     }
 
@@ -157,7 +158,8 @@ class DiscountManager
                     ->count();
 
                 if ($used >= $discount->usage_limit_per_user) {
-                    throw new DiscountUsageLimitReachedException(
+                    throw DiscountUsageLimitReachedException::for(
+                        $discount,
                         'The discount usage limit for this user has been reached.'
                     );
                 }
@@ -171,7 +173,7 @@ class DiscountManager
                 ->increment('used_count');
 
             if ($incremented === 0) {
-                throw new DiscountUsageLimitReachedException;
+                throw DiscountUsageLimitReachedException::for($discount);
             }
 
             $discount->refresh();
