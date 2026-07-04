@@ -2,6 +2,8 @@
 
 namespace Binafy\LaravelDiscount\Providers;
 
+use Binafy\LaravelDiscount\Console\Commands\GenerateDiscountCodesCommand;
+use Binafy\LaravelDiscount\Console\Commands\PruneDiscountsCommand;
 use Binafy\LaravelDiscount\DiscountManager;
 use Binafy\LaravelDiscount\Integrations\LaravelCart\CartDiscount;
 use Binafy\LaravelDiscount\Support\DiscountCodeGenerator;
@@ -46,6 +48,14 @@ class LaravelDiscountServiceProvider extends ServiceProvider
             $this->publishesMigrations([
                 __DIR__ . '/../../database/migrations' => database_path('migrations'),
             ], 'laravel-discount-migrations');
+        }
+
+        // Register Commands
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                GenerateDiscountCodesCommand::class,
+                PruneDiscountsCommand::class,
+            ]);
         }
     }
 }
