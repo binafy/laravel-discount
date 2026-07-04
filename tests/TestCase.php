@@ -2,9 +2,11 @@
 
 namespace Tests;
 
+use Binafy\LaravelDiscount\Facades\LaravelDiscount;
 use Binafy\LaravelDiscount\Providers\LaravelDiscountServiceProvider;
 use Illuminate\Encryption\Encrypter;
 use Orchestra\Testbench\Concerns\WithLaravelMigrations;
+use Tests\Models\User;
 
 abstract class TestCase extends \Orchestra\Testbench\TestCase
 {
@@ -18,6 +20,16 @@ abstract class TestCase extends \Orchestra\Testbench\TestCase
     protected function getPackageProviders($app): array
     {
         return [LaravelDiscountServiceProvider::class];
+    }
+
+    /**
+     * Load package facade aliases.
+     */
+    protected function getPackageAliases($app): array
+    {
+        return [
+            'LaravelDiscount' => LaravelDiscount::class,
+        ];
     }
 
     /**
@@ -41,7 +53,7 @@ abstract class TestCase extends \Orchestra\Testbench\TestCase
         ));
 
         // Set user model
-        $app['config']->set('auth.providers.users.model', \Tests\Models\User::class);
-        $app['config']->set('laravel-discount.users.model', \Tests\Models\User::class);
+        $app['config']->set('auth.providers.users.model', User::class);
+        $app['config']->set('laravel-discount.users.model', User::class);
     }
 }

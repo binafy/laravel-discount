@@ -15,6 +15,12 @@ test('facade resolves the discount manager singleton', function () {
         ->and(LaravelDiscount::getFacadeRoot())->toBe(app(DiscountManager::class));
 });
 
+test('the root alias works without importing the facade', function () {
+    // Mirrors what Laravel registers from `extra.laravel.aliases`.
+    expect(\LaravelDiscount::getFacadeRoot())->toBeInstanceOf(DiscountManager::class)
+        ->and(\LaravelDiscount::generateCode())->toHaveLength(8);
+});
+
 test('finds a discount by code through the facade', function () {
     $discount = Discount::query()->create([
         'code' => 'WELCOME',
