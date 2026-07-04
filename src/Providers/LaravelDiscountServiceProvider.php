@@ -2,6 +2,7 @@
 
 namespace Binafy\LaravelDiscount\Providers;
 
+use Binafy\LaravelDiscount\DiscountManager;
 use Illuminate\Support\ServiceProvider;
 
 class LaravelDiscountServiceProvider extends ServiceProvider
@@ -13,5 +14,7 @@ class LaravelDiscountServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__ . '/../../database/migrations');
         $this->mergeConfigFrom(__DIR__ . '/../../config/laravel-discount.php', 'laravel-discount');
+
+        $this->app->singleton(DiscountManager::class);
     }
 }
