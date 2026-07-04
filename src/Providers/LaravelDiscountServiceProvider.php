@@ -11,7 +11,7 @@ class LaravelDiscountServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
-        $this->mergeConfigFrom(__DIR__ . '/../config/laravel-discount.php', 'laravel-discount');
+        $this->loadMigrationsFrom(__DIR__ . '/../../database/migrations');
+        $this->mergeConfigFrom(__DIR__ . '/../../config/laravel-discount.php', 'laravel-discount');
     }
 }
