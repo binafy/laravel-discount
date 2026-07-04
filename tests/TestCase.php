@@ -4,9 +4,12 @@ namespace Tests;
 
 use Binafy\LaravelDiscount\Providers\LaravelDiscountServiceProvider;
 use Illuminate\Encryption\Encrypter;
+use Orchestra\Testbench\Concerns\WithLaravelMigrations;
 
 abstract class TestCase extends \Orchestra\Testbench\TestCase
 {
+    use WithLaravelMigrations;
+
     /**
      * Load package service provider.
      *
@@ -38,9 +41,7 @@ abstract class TestCase extends \Orchestra\Testbench\TestCase
         ));
 
         // Set user model
-//        $app['config']->set('auth.providers.users.model', User::class);
-
-        // Set user model for monitoring config
-//        $app['config']->set('laravel-discount.user.model', User::class);
+        $app['config']->set('auth.providers.users.model', \Tests\Models\User::class);
+        $app['config']->set('laravel-discount.users.model', \Tests\Models\User::class);
     }
 }
