@@ -6,13 +6,16 @@ use Binafy\LaravelDiscount\Enums\DiscountType;
 use Binafy\LaravelDiscount\Exceptions\DiscountException;
 use Binafy\LaravelDiscount\Exceptions\DiscountExpiredException;
 use Binafy\LaravelDiscount\Exceptions\DiscountNotActiveException;
+use Binafy\LaravelDiscount\Exceptions\DiscountNotFoundException;
 use Binafy\LaravelDiscount\Exceptions\DiscountNotStartedException;
 use Binafy\LaravelDiscount\Exceptions\DiscountUsageLimitReachedException;
 use Binafy\LaravelDiscount\Exceptions\MinimumOrderValueException;
 use Binafy\LaravelDiscount\Models\Discount;
 use Binafy\LaravelDiscount\Models\DiscountUsage;
+use Binafy\LaravelDiscount\Support\DiscountCodeGenerator;
 use Binafy\LaravelDiscount\Support\DiscountResult;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class DiscountManager
@@ -85,6 +88,50 @@ class DiscountManager
         } catch (DiscountException) {
             return false;
         }
+    }
+
+    /**
+     * Find a discount by its code.
+     *
+     * @throws DiscountNotFoundException
+     */
+    public function findByCode(string $code): Discount
+    {
+        $discount = Discount::query()->where('code', $code)->first();
+
+        if (is_null($discount)) {
+            throw DiscountNotFoundException::forCode($code);
+        }
+
+        return $discount;
+    }
+
+    /**
+     * Validate and apply a discount, found by its code, to the given amount.
+     *
+     * @throws DiscountException
+     */
+    public function applyCode(string $code, float $amount, Model|int|null $user = null): DiscountResult
+    {
+        return $this->apply($this->findByCode($code), $amount, $user);
+    }
+
+    /**
+     * Generate a single unique discount code.
+     */
+    public function generateCode(?string $prefix = null): string
+    {
+        return app(DiscountCodeGenerator::class)->generate($prefix);
+    }
+
+    /**
+     * Generate a batch of unique discount codes.
+     *
+     * @return Collection<int, string>
+     */
+    public function generateCodes(int $count, ?string $prefix = null): Collection
+    {
+        return app(DiscountCodeGenerator::class)->generateMany($count, $prefix);
     }
 
     /**

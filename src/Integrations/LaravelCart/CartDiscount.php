@@ -101,13 +101,7 @@ class CartDiscount
         }
 
         if (is_string($discounts)) {
-            $discount = Discount::query()->where('code', $discounts)->first();
-
-            if (is_null($discount)) {
-                throw DiscountNotFoundException::forCode($discounts);
-            }
-
-            return collect([$discount]);
+            return collect([$this->manager->findByCode($discounts)]);
         }
 
         return collect($discounts);

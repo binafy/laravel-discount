@@ -39,7 +39,10 @@
         "laravel": {
             "providers": [
                 "Binafy\\LaravelDiscount\\Providers\\LaravelDiscountServiceProvider"
-            ]
+            ],
+            "aliases": {
+                "LaravelDiscount": "Binafy\\LaravelDiscount\\Facades\\LaravelDiscount"
+            }
         }
     },
     "config": {
