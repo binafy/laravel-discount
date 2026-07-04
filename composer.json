@@ -21,6 +21,11 @@
             "Binafy\\LaravelDiscount\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
     "require": {
         "php": "^8.0",
         "laravel/framework": "^9.0|^10.0|^11.0|^12.0"
