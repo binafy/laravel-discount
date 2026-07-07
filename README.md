@@ -60,7 +60,7 @@ The `Laravel-Discount` is a Laravel package designed to handle discounts in your
 <a name="requirements"></a>
 ## Requirements
 
-- PHP 8.0 or higher
+- PHP 8.1 or higher
 - Laravel 9.0 or higher
 
 <a name="installation"></a>
