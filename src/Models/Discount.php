@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
  * @property string|null $code
  * @property DiscountType $type
  * @property string $value
+ * @property string|null $max_discount_amount Cap for the calculated discount, e.g. "20% but at most 100".
  * @property string|null $min_order_value
  * @property array|null $conditions
  * @property int|null $usage_limit
@@ -47,6 +48,7 @@ class Discount extends Model
         'code',
         'type',
         'value',
+        'max_discount_amount',
         'min_order_value',
         'conditions',
         'usage_limit',
@@ -77,6 +79,7 @@ class Discount extends Model
     protected $casts = [
         'type' => DiscountType::class,
         'value' => 'decimal:2',
+        'max_discount_amount' => 'decimal:2',
         'min_order_value' => 'decimal:2',
         'conditions' => 'array',
         'usage_limit' => 'integer',

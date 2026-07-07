@@ -25,7 +25,8 @@ class DiscountManager
 {
     /**
      * Calculate the amount this discount deducts from the given amount.
-     * The result never exceeds the amount itself.
+     * The result never exceeds the amount itself, nor the discount's
+     * `max_discount_amount` cap when one is set.
      */
     public function calculate(Discount $discount, float $amount): float
     {
@@ -34,6 +35,10 @@ class DiscountManager
         $discountAmount = $discount->type === DiscountType::Percentage
             ? $amount * $value / 100
             : $value;
+
+        if (! is_null($discount->max_discount_amount)) {
+            $discountAmount = min($discountAmount, (float) $discount->max_discount_amount);
+        }
 
         return round(min($discountAmount, $amount), 2);
     }

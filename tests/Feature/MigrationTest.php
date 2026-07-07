@@ -14,6 +14,7 @@ test('discounts table is created with expected columns', function () {
             'code',
             'type',
             'value',
+            'max_discount_amount',
             'min_order_value',
             'conditions',
             'usage_limit',

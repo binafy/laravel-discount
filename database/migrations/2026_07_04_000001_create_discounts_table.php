@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('code')->nullable()->unique();
             $table->enum('type', DiscountType::values())->default(DiscountType::Percentage->value);
             $table->decimal('value', 10, 2);
+            $table->decimal('max_discount_amount', 15, 2)->nullable();
             $table->decimal('min_order_value', 15, 2)->nullable();
             $table->json('conditions')->nullable();
             $table->unsignedInteger('usage_limit')->nullable();

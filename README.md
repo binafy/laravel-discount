@@ -34,6 +34,7 @@ The `Laravel-Discount` is a Laravel package designed to handle discounts in your
   - [Create a Discount](#create-a-discount)
     - [Percentage Discount](#percentage-discount)
     - [Fixed Amount Discount](#fixed-amount-discount)
+    - [Maximum Discount Amount](#maximum-discount-amount)
   - [Apply a Discount](#apply-a-discount)
   - [Discount Codes](#discount-codes)
     - [Generate Codes](#generate-codes)
@@ -125,6 +126,23 @@ $discount = Discount::query()->create([
 ```
 
 > A fixed discount never exceeds the amount it is applied to, so the payable amount can never go below zero.
+
+<a name="maximum-discount-amount"></a>
+#### Maximum Discount Amount
+
+Cap how much a discount can deduct — "20% off, up to 100":
+
+```php
+$discount = Discount::query()->create([
+    'code' => 'SAVE20',
+    'type' => DiscountType::Percentage,
+    'value' => 20,
+    'max_discount_amount' => 100,
+]);
+
+LaravelDiscount::apply($discount, 300)->discountAmount;  // 60.0  (20% of 300)
+LaravelDiscount::apply($discount, 1000)->discountAmount; // 100.0 (capped)
+```
 
 <a name="apply-a-discount"></a>
 ### Apply a Discount
