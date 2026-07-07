@@ -47,6 +47,7 @@ The `Laravel-Discount` is a Laravel package designed to handle discounts in your
     - [Minimum Order Value](#minimum-order-value)
     - [Attach Discounts to Models](#attach-discounts-to-models)
   - [Stackable Discounts](#stackable-discounts)
+  - [Form Request Validation](#form-request-validation)
   - [Validation & Exceptions](#validation--exceptions)
   - [Events](#events)
   - [Laravel Cart Integration](#laravel-cart-integration)
@@ -327,6 +328,31 @@ $result = LaravelDiscount::applyMany([$tenPercent, $tenFixed, $bigSolo], 100);
 
 $result->discounts;       // the discounts that were actually applied
 $result->discountAmount;  // the winning total
+```
+
+<a name="form-request-validation"></a>
+### Form Request Validation
+
+Validate a submitted coupon code with the `ValidDiscountCode` rule. It checks that the code exists and is currently applicable, and the error message states the exact reason (not found, expired, usage limit reached, below minimum order, ...):
+
+```php
+use Binafy\LaravelDiscount\Rules\ValidDiscountCode;
+
+public function rules(): array
+{
+    return [
+        'code' => ['required', new ValidDiscountCode(
+            orderAmount: $this->cartTotal(),
+            user: $this->user(),
+        )],
+    ];
+}
+```
+
+For guests, pass a session id instead of a user:
+
+```php
+'code' => ['required', new ValidDiscountCode($total, sessionId: session()->getId())],
 ```
 
 <a name="validation--exceptions"></a>
