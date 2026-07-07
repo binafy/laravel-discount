@@ -6,7 +6,7 @@
 [![Latest Stable Version](https://img.shields.io/packagist/v/binafy/laravel-discount.svg?style=flat-square)](https://packagist.org/packages/binafy/laravel-discount)
 [![Total Downloads](https://img.shields.io/packagist/dt/binafy/laravel-discount.svg?style=flat-square)](https://packagist.org/packages/binafy/laravel-discount)
 [![License](https://img.shields.io/packagist/l/binafy/laravel-discount)](https://packagist.org/packages/binafy/laravel-discount)
-[![Passed Tests](https://github.com/binafy/laravel-discount/actions/workflows/tests.yml/badge.svg)](https://github.com/binafy/laravel-discount/actions/workflows/tests.yml)
+[![Passed Tests](https://github.com/binafy/laravel-discount/actions/workflows/run-tests.yml/badge.svg)](https://github.com/binafy/laravel-discount/actions/workflows/run-tests.yml)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/binafy/laravel-discount)
 
 The `Laravel-Discount` is a Laravel package designed to handle discounts in your application effortlessly. This package provides a comprehensive and flexible solution to apply various discount strategies, making it easy to integrate promotional offers, seasonal sales, and other discount-related functionalities into your Laravel project.
