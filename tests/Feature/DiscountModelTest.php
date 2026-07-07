@@ -4,14 +4,16 @@ use Binafy\LaravelDiscount\Enums\DiscountType;
 use Binafy\LaravelDiscount\Models\Discount;
 use Binafy\LaravelDiscount\Models\DiscountUsage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 use Tests\Models\Product;
 use Tests\Models\User;
 
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    if (! Illuminate\Support\Facades\Schema::hasTable('products')) {
-        Illuminate\Support\Facades\Schema::create('products', function ($table) {
+    if (! Schema::hasTable('products')) {
+        Schema::create('products', function ($table) {
             $table->id();
             $table->string('name');
             $table->decimal('price', 15, 2)->default(0);
@@ -39,8 +41,8 @@ test('discount attributes are cast to proper types', function () {
         ->and($discount->conditions)->toBe(['categories' => [1, 2]])
         ->and($discount->is_stackable)->toBeTrue()
         ->and($discount->is_active)->toBeTrue()
-        ->and($discount->starts_at)->toBeInstanceOf(Illuminate\Support\Carbon::class)
-        ->and($discount->expires_at)->toBeInstanceOf(Illuminate\Support\Carbon::class);
+        ->and($discount->starts_at)->toBeInstanceOf(Carbon::class)
+        ->and($discount->expires_at)->toBeInstanceOf(Carbon::class);
 });
 
 test('valid scope only returns applicable discounts', function () {

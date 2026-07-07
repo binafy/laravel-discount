@@ -4,6 +4,7 @@ namespace Binafy\LaravelDiscount\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -11,11 +12,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $user_id Null for guest redemptions.
  * @property string|null $session_id Set for guest redemptions.
  * @property string|null $amount
- * @property \Illuminate\Support\Carbon $used_at
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property Carbon $used_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  * @property-read Discount $discount
- * @property-read \Illuminate\Database\Eloquent\Model $user
+ * @property-read Model $user
  */
 class DiscountUsage extends Model
 {

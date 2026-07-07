@@ -15,8 +15,7 @@ class ValidDiscountCode implements Rule
         protected float $orderAmount = 0,
         protected Model|int|null $user = null,
         protected ?string $sessionId = null,
-    ) {
-    }
+    ) {}
 
     /**
      * Determine if the validation rule passes.

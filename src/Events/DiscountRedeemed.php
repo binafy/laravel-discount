@@ -14,6 +14,5 @@ class DiscountRedeemed
     public function __construct(
         public Discount $discount,
         public DiscountUsage $usage,
-    ) {
-    }
+    ) {}
 }

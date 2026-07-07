@@ -1,5 +1,6 @@
 <?php
 
+use Binafy\LaravelDiscount\DiscountManager;
 use Binafy\LaravelDiscount\Enums\DiscountType;
 use Binafy\LaravelDiscount\Models\Discount;
 use Binafy\LaravelDiscount\Rules\ValidDiscountCode;
@@ -9,7 +10,7 @@ use Tests\Models\User;
 
 uses(RefreshDatabase::class);
 
-function validateCode(mixed $code, ValidDiscountCode $rule): \Illuminate\Validation\Validator
+function validateCode(mixed $code, ValidDiscountCode $rule): Illuminate\Validation\Validator
 {
     return Validator::make(['code' => $code], ['code' => ['required', $rule]]);
 }
@@ -73,7 +74,7 @@ test('respects the per-user limit for the given user', function () {
 
     expect(validateCode('ONCE', new ValidDiscountCode(user: $user))->passes())->toBeTrue();
 
-    app(\Binafy\LaravelDiscount\DiscountManager::class)->redeem($discount, $user);
+    app(DiscountManager::class)->redeem($discount, $user);
 
     $validator = validateCode('ONCE', new ValidDiscountCode(user: $user));
 
@@ -89,7 +90,7 @@ test('respects the session id for guests', function () {
         'usage_limit_per_user' => 1,
     ]);
 
-    app(\Binafy\LaravelDiscount\DiscountManager::class)->redeem($discount, sessionId: 'session-a');
+    app(DiscountManager::class)->redeem($discount, sessionId: 'session-a');
 
     expect(validateCode('GUEST', new ValidDiscountCode(sessionId: 'session-a'))->fails())->toBeTrue()
         ->and(validateCode('GUEST', new ValidDiscountCode(sessionId: 'session-b'))->passes())->toBeTrue();

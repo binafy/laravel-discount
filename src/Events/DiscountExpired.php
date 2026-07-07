@@ -10,7 +10,5 @@ class DiscountExpired
 {
     use Dispatchable, SerializesModels;
 
-    public function __construct(public Discount $discount)
-    {
-    }
+    public function __construct(public Discount $discount) {}
 }

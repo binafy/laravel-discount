@@ -4,9 +4,11 @@ namespace Binafy\LaravelDiscount\Models;
 
 use Binafy\LaravelDiscount\Enums\DiscountType;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -23,11 +25,11 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
  * @property int $used_count
  * @property bool $is_stackable
  * @property bool $is_active
- * @property \Illuminate\Support\Carbon|null $starts_at
- * @property \Illuminate\Support\Carbon|null $expires_at
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
- * @property-read \Illuminate\Database\Eloquent\Collection<int, DiscountUsage> $usages
+ * @property Carbon|null $starts_at
+ * @property Carbon|null $expires_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read Collection<int, DiscountUsage> $usages
  *
  * @method static Builder|Discount active()
  * @method static Builder|Discount started()

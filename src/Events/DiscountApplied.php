@@ -14,6 +14,5 @@ class DiscountApplied
     public function __construct(
         public DiscountResult $result,
         public Model|int|null $user = null,
-    ) {
-    }
+    ) {}
 }

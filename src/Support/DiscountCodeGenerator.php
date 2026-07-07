@@ -64,7 +64,7 @@ class DiscountCodeGenerator
             $code .= $characters[random_int(0, $max)];
         }
 
-        return $prefix ? $prefix . $separator . $code : $code;
+        return $prefix ? $prefix.$separator.$code : $code;
     }
 
     /**
