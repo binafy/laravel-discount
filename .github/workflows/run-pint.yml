@@ -5,6 +5,8 @@ on: [push]
 jobs:
     lint:
         runs-on: ubuntu-latest
+        permissions:
+            contents: write
         strategy:
             fail-fast: true
             matrix:

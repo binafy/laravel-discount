@@ -5,6 +5,7 @@ use Binafy\LaravelDiscount\Enums\DiscountType;
 use Binafy\LaravelDiscount\Events\DiscountApplied;
 use Binafy\LaravelDiscount\Events\DiscountExpired;
 use Binafy\LaravelDiscount\Events\DiscountRedeemed;
+use Binafy\LaravelDiscount\Exceptions\DiscountUsageLimitReachedException;
 use Binafy\LaravelDiscount\Models\Discount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -104,7 +105,7 @@ test('DiscountRedeemed is not dispatched when redemption fails', function () {
 
     try {
         $this->manager->redeem($discount, $user);
-    } catch (\Binafy\LaravelDiscount\Exceptions\DiscountUsageLimitReachedException) {
+    } catch (DiscountUsageLimitReachedException) {
         // expected
     }
 

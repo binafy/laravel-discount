@@ -7,13 +7,9 @@ use Illuminate\Support\Facades\Artisan;
 
 uses(RefreshDatabase::class);
 
-/*
-|--------------------------------------------------------------------------
-| discount:generate
-|--------------------------------------------------------------------------
-*/
-
 test('discount:generate outputs a single code by default', function () {
+    $this->withoutMockingConsoleOutput();
+
     Artisan::call('discount:generate');
 
     $codes = array_filter(explode("\n", trim(Artisan::output())));
@@ -23,6 +19,8 @@ test('discount:generate outputs a single code by default', function () {
 });
 
 test('discount:generate outputs a batch of distinct prefixed codes', function () {
+    $this->withoutMockingConsoleOutput();
+
     Artisan::call('discount:generate', ['count' => 5, '--prefix' => 'VIP']);
 
     $codes = array_filter(explode("\n", trim(Artisan::output())));

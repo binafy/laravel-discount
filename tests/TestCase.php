@@ -5,6 +5,7 @@ namespace Tests;
 use Binafy\LaravelDiscount\Facades\LaravelDiscount;
 use Binafy\LaravelDiscount\Providers\LaravelDiscountServiceProvider;
 use Illuminate\Encryption\Encrypter;
+use Illuminate\Foundation\Application;
 use Orchestra\Testbench\Concerns\WithLaravelMigrations;
 use Tests\Models\User;
 
@@ -15,7 +16,7 @@ abstract class TestCase extends \Orchestra\Testbench\TestCase
     /**
      * Load package service provider.
      *
-     * @param \Illuminate\Foundation\Application $app
+     * @param  Application  $app
      */
     protected function getPackageProviders($app): array
     {
@@ -33,18 +34,28 @@ abstract class TestCase extends \Orchestra\Testbench\TestCase
     }
 
     /**
+     * Define database migrations.
+     */
+    protected function defineDatabaseMigrations(): void
+    {
+        if (! method_exists($this, 'setUpWithLaravelMigrations')) {
+            $this->loadLaravelMigrations();
+        }
+    }
+
+    /**
      * Define environment setup.
      *
-     * @param \Illuminate\Foundation\Application $app
+     * @param  Application  $app
      */
     protected function getEnvironmentSetUp($app): void
     {
         // Set default database to use sqlite :memory:
         $app['config']->set('database.default', 'testing');
         $app['config']->set('database.connections.testing', [
-            'driver'   => 'sqlite',
+            'driver' => 'sqlite',
             'database' => ':memory:',
-            'prefix'   => '',
+            'prefix' => '',
         ]);
 
         // Set app key

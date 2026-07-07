@@ -13,9 +13,7 @@ use Illuminate\Support\Collection;
 
 class CartDiscount
 {
-    public function __construct(protected DiscountManager $manager)
-    {
-    }
+    public function __construct(protected DiscountManager $manager) {}
 
     /**
      * Apply the given discounts (models, a code string, or a list) to the
