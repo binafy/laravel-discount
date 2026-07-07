@@ -28,7 +28,7 @@
     ],
     "type": "library",
     "license": "MIT",
-    "minimum-stability": "dev",
+    "minimum-stability": "stable",
     "authors": [
         {
             "name": "Milwad Khosravi",
@@ -72,9 +72,14 @@
         }
     },
     "config": {
+        "sort-packages": true,
         "allow-plugins": {
             "pestphp/pest-plugin": true
         }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest",
+        "test-coverage": "vendor/bin/pest --coverage-html ./coverage"
     },
     "suggest": {
         "binafy/laravel-cart": "Required to apply discounts to carts and cart items (^2.0)."
