@@ -34,6 +34,16 @@ abstract class TestCase extends \Orchestra\Testbench\TestCase
     }
 
     /**
+     * Define database migrations.
+     */
+    protected function defineDatabaseMigrations(): void
+    {
+        if (! method_exists($this, 'setUpWithLaravelMigrations')) {
+            $this->loadLaravelMigrations();
+        }
+    }
+
+    /**
      * Define environment setup.
      *
      * @param  Application  $app
