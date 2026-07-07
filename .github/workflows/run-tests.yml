@@ -14,19 +14,19 @@ jobs:
                 include:
                     - laravel: 12.*
                       testbench: 10.*
-                      pest-plugin-laravel: 3.0.0
+                      pest-plugin-laravel: '^3.1'
 
                     - laravel: 11.*
                       testbench: 9.*
-                      pest-plugin-laravel: 2.3.0
+                      pest-plugin-laravel: '^2.3'
 
                     - laravel: 10.*
                       testbench: 8.*
-                      pest-plugin-laravel: 2.0.0
+                      pest-plugin-laravel: '^2.0'
 
                     - laravel: 9.*
                       testbench: 7.*
-                      pest-plugin-laravel: 1.4.0
+                      pest-plugin-laravel: '^1.4'
 
                 exclude:
                     - laravel: 12.*
