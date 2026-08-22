@@ -93,6 +93,8 @@ Publish the migrations if you want to change the table structure before migratin
 php artisan vendor:publish --tag="laravel-discount-migrations"
 ```
 
+Once a migration is published, the package no longer loads its own copy of it, so `php artisan migrate` runs each migration exactly once.
+
 <a name="usage"></a>
 ## Usage
 
