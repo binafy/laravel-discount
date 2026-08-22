@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
@@ -57,7 +58,10 @@ test('the migrations copied by vendor:publish are not duplicated by the package'
     expect(Schema::hasTable('discounts'))->toBeTrue()
         ->and(Schema::hasTable('discount_usages'))->toBeTrue()
         ->and(Schema::hasTable('discountables'))->toBeTrue();
-});
+})->skip(
+    version_compare(Application::VERSION, '11.0.0', '<'),
+    'Migrations are only re-stamped on publish from Laravel 11 onwards.'
+);
 
 test('package migrations are loaded when they are not published', function () {
     $this->refreshApplication();
