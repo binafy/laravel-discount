@@ -18,7 +18,7 @@ class LaravelDiscountServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
+        $this->loadUnpublishedMigrations();
         $this->mergeConfigFrom(__DIR__.'/../../config/laravel-discount.php', 'laravel-discount');
 
         $this->app->singleton(DiscountManager::class);
@@ -28,6 +28,35 @@ class LaravelDiscountServiceProvider extends ServiceProvider
         if (class_exists(Cart::class)) {
             $this->app->singleton(CartDiscount::class);
         }
+    }
+
+    /**
+     * Register the package migrations that have not been published.
+     *
+     * When the migrations are published, `vendor:publish` copies them into the
+     * application's `database/migrations` directory, on Laravel 11+ with a
+     * fresh timestamp. Loading the package copies too would run the same
+     * migration a second time and fail with "table already exists".
+     */
+    protected function loadUnpublishedMigrations(): void
+    {
+        $this->callAfterResolving('migrator', function ($migrator) {
+            foreach (glob(__DIR__.'/../../database/migrations/*.php') ?: [] as $migration) {
+                if (! $this->migrationIsPublished($migration)) {
+                    $migrator->path($migration);
+                }
+            }
+        });
+    }
+
+    /**
+     * Determine if the given package migration has been published to the application.
+     */
+    protected function migrationIsPublished(string $migration): bool
+    {
+        $name = preg_replace('/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', basename($migration, '.php'));
+
+        return (bool) (glob(database_path('migrations').DIRECTORY_SEPARATOR.'*_'.$name.'.php') ?: []);
     }
 
     /**

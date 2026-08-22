@@ -63,6 +63,11 @@ abstract class TestCase extends \Orchestra\Testbench\TestCase
             Encrypter::generateKey(config()['app.cipher'])
         ));
 
+        $app['config']->set('database.migrations', [
+            'table' => 'migrations',
+            'update_date_on_publish' => true,
+        ]);
+
         // Set user model
         $app['config']->set('auth.providers.users.model', User::class);
         $app['config']->set('laravel-discount.users.model', User::class);
