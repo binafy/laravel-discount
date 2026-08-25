@@ -15,6 +15,9 @@ The `Laravel-Discount` is a Laravel package designed to handle discounts in your
 
 - Percentage Discounts: Apply percentage-based discounts to your products or services.
 - Fixed Amount Discounts: Deduct a fixed amount from the total cost.
+- Buy X Get Y: Run "buy 2, get 1 free" deals that price the free items automatically.
+- Tiered Discounts: Grow the discount with the order total, e.g. 5% over 1,000,000 and 10% over 5,000,000.
+- Free Shipping: Waive the shipping cost instead of deducting from the total.
 - Conditional Discounts: Set conditions for discounts, such as minimum order value or specific product categories.
 - Discount Codes: Generate and manage discount codes for your customers.
 - Expiry Dates: Set expiration dates for discounts to create time-limited offers.
@@ -30,11 +33,15 @@ The `Laravel-Discount` is a Laravel package designed to handle discounts in your
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Publish Config & Migrations](#publish-config--migrations)
+  - [Upgrading an Existing Installation](#upgrading-an-existing-installation)
 - [Usage](#usage)
   - [Create a Discount](#create-a-discount)
     - [Percentage Discount](#percentage-discount)
     - [Fixed Amount Discount](#fixed-amount-discount)
     - [Maximum Discount Amount](#maximum-discount-amount)
+    - [Buy X Get Y](#buy-x-get-y)
+    - [Tiered Discount](#tiered-discount)
+    - [Free Shipping](#free-shipping)
   - [Apply a Discount](#apply-a-discount)
   - [Discount Codes](#discount-codes)
     - [Generate Codes](#generate-codes)
@@ -95,6 +102,22 @@ php artisan vendor:publish --tag="laravel-discount-migrations"
 
 Once a migration is published, the package no longer loads its own copy of it, so `php artisan migrate` runs each migration exactly once.
 
+<a name="upgrading-an-existing-installation"></a>
+### Upgrading an Existing Installation
+
+Fresh installs need nothing here. If you already migrated the `discounts` table before the `buy_x_get_y`, `tiered`, and `free_shipping` types existed, the `type` enum still rejects them. Widen it — and make `value` optional, since the new types do not use it — with your own migration:
+
+```php
+use Binafy\LaravelDiscount\Enums\DiscountType;
+
+Schema::table('discounts', function (Blueprint $table) {
+    $table->enum('type', DiscountType::values())->default(DiscountType::Percentage->value)->change();
+    $table->decimal('value', 10, 2)->default(0)->change();
+});
+```
+
+> On Laravel 10 and below, `->change()` requires `doctrine/dbal`.
+
 <a name="usage"></a>
 ## Usage
 
@@ -147,6 +170,124 @@ LaravelDiscount::apply($discount, 300)->discountAmount;  // 60.0  (20% of 300)
 LaravelDiscount::apply($discount, 1000)->discountAmount; // 100.0 (capped)
 ```
 
+<a name="buy-x-get-y"></a>
+#### Buy X Get Y
+
+"Buy 2, get 1 free" — the deal lives in the `conditions` column, and the manager works out how many items come free:
+
+```php
+$discount = Discount::query()->create([
+    'name' => 'Buy 2 get 1 free',
+    'code' => 'BUY2GET1',
+    'type' => DiscountType::BuyXGetY,
+    'conditions' => ['buy' => 2, 'get' => 1],
+]);
+```
+
+Because the deal counts items, pass the quantity the amount covers:
+
+```php
+// 3 items at 100 each: the third one is free.
+LaravelDiscount::apply($discount, 300, quantity: 3)->discountAmount; // 100.0
+
+// 6 items at 50 each: two full sets, so two items are free.
+LaravelDiscount::apply($discount, 300, quantity: 6)->discountAmount; // 100.0
+
+// Below a full set, nothing applies.
+LaravelDiscount::apply($discount, 200, quantity: 2)->discountAmount; // 0.0
+```
+
+The free items are priced at the basket's average unit price, so a mixed basket is handled too. Two optional conditions refine the deal:
+
+| Condition                 | Meaning                                                            | Default |
+|---------------------------|--------------------------------------------------------------------|---------|
+| `buy`                     | Items that must be paid for (required)                             | —       |
+| `get`                     | Items that come free per set (required)                            | —       |
+| `get_discount_percentage` | How much off the free items, e.g. `50` for "the third at half off" | `100`   |
+| `max_free_items`          | Cap on free items per order                                        | none    |
+
+```php
+// Buy 2, get the third at 50% off, at most 2 discounted items per order.
+'conditions' => ['buy' => 2, 'get' => 1, 'get_discount_percentage' => 50, 'max_free_items' => 2],
+```
+
+> The `quantity` argument is also accepted by `applyCode()`, `applyMany()` and the `applyDiscounts()` trait method. Every other discount type ignores it.
+
+<a name="tiered-discount"></a>
+#### Tiered Discount
+
+Grow the discount with the order total. The ladder lives in the `conditions` column, and the highest tier the amount reaches wins:
+
+```php
+$discount = Discount::query()->create([
+    'name' => 'Spend more, save more',
+    'type' => DiscountType::Tiered,
+    'conditions' => ['tiers' => [
+        ['min' => 1_000_000, 'value' => 5],  // over 1,000,000 → 5%
+        ['min' => 5_000_000, 'value' => 10], // over 5,000,000 → 10%
+    ]],
+]);
+
+LaravelDiscount::apply($discount, 900_000)->discountAmount;   // 0.0      (below every tier)
+LaravelDiscount::apply($discount, 2_000_000)->discountAmount; // 100_000.0 (5%)
+LaravelDiscount::apply($discount, 6_000_000)->discountAmount; // 600_000.0 (10%)
+```
+
+Tiers may be listed in any order, and a tier applies exactly at its `min`. A tier discounts by percentage unless it sets `'type' => 'fixed'`:
+
+```php
+'conditions' => ['tiers' => [
+    ['min' => 1_000_000, 'value' => 50_000, 'type' => 'fixed'],
+    ['min' => 5_000_000, 'value' => 400_000, 'type' => 'fixed'],
+]],
+```
+
+To show the customer which tier they landed on:
+
+```php
+LaravelDiscount::matchingTier($discount, 6_000_000); // ['min' => 5000000, 'value' => 10]
+```
+
+<a name="free-shipping"></a>
+#### Free Shipping
+
+A free shipping discount deducts nothing from the order total. Instead it raises a flag on the result, which you honour when charging for shipping:
+
+```php
+$discount = Discount::query()->create([
+    'name' => 'Free shipping',
+    'code' => 'FREESHIP',
+    'type' => DiscountType::FreeShipping,
+]);
+
+$result = LaravelDiscount::applyCode('FREESHIP', 500);
+
+$result->discountAmount;        // 0.0
+$result->payableAmount();       // 500.0
+$result->hasFreeShipping();     // true
+$result->payableShipping(35);   // 0.0   (35 when shipping is not free)
+$result->payableTotal(35);      // 500.0 (535 when shipping is not free)
+```
+
+Free shipping sits outside the stacking competition described in [Stackable Discounts](#stackable-discounts): since it saves nothing on the amount, it would always lose. Every valid free shipping discount is applied on top of whichever monetary discount wins:
+
+```php
+$result = LaravelDiscount::applyMany([$freeShipping, $twentyPercent], 500);
+
+$result->discountAmount;    // 100.0 (the 20%)
+$result->hasFreeShipping(); // true
+```
+
+Everything else still applies, so `min_order_value` gates free shipping the usual way:
+
+```php
+Discount::query()->create([
+    'code' => 'SHIP-OVER-1000',
+    'type' => DiscountType::FreeShipping,
+    'min_order_value' => 1000,
+]);
+```
+
 <a name="apply-a-discount"></a>
 ### Apply a Discount
 
@@ -157,10 +298,11 @@ use Binafy\LaravelDiscount\Facades\LaravelDiscount;
 
 $result = LaravelDiscount::apply($discount, 200);
 
-$result->originalAmount;   // 200.0
-$result->discountAmount;   // 40.0
-$result->payableAmount();  // 160.0
-$result->discounts;        // Collection of the applied discounts
+$result->originalAmount;    // 200.0
+$result->discountAmount;    // 40.0
+$result->payableAmount();   // 160.0
+$result->discounts;         // Collection of the applied discounts
+$result->hasFreeShipping(); // false — see Free Shipping
 ```
 
 To check a discount without throwing exceptions:
@@ -288,7 +430,7 @@ LaravelDiscount::applyCode('BIG-SPENDER', 300); // throws MinimumOrderValueExcep
 LaravelDiscount::applyCode('BIG-SPENDER', 800); // OK
 ```
 
-The `conditions` JSON column is also available for storing your own arbitrary condition data.
+The `conditions` JSON column also configures the [Buy X Get Y](#buy-x-get-y) and [Tiered](#tiered-discount) types, and is otherwise free for your own arbitrary condition data.
 
 <a name="attach-discounts-to-models"></a>
 #### Attach Discounts to Models
@@ -324,6 +466,7 @@ Mark a discount with `is_stackable => true` to allow it to combine with other st
 - Non-stackable discounts compete alone.
 - Whichever saves the customer the most wins.
 - Invalid discounts are silently skipped.
+- [Free shipping](#free-shipping) discounts sit outside the competition and always apply.
 
 ```php
 $result = LaravelDiscount::applyMany([$tenPercent, $tenFixed, $bigSolo], 100);
@@ -370,6 +513,7 @@ Every failure case has its own exception, all extending `Binafy\LaravelDiscount\
 | `DiscountExpiredException`           | `expires_at` is in the past                    |
 | `DiscountUsageLimitReachedException` | The total or per-user usage limit is reached   |
 | `MinimumOrderValueException`         | The order total is below `min_order_value`     |
+| `InvalidDiscountConditionsException` | A "buy X get Y" or tiered discount is misconfigured |
 
 Each exception carries the discount that failed, so you can handle every case separately:
 
@@ -430,6 +574,15 @@ $result = $cartDiscount->applyItemDiscounts($cart);
 ```
 
 The cart total is checked against `min_order_value`, and the cart's user is used for per-user usage limits automatically.
+
+Item quantities are counted for you, so [Buy X Get Y](#buy-x-get-y) discounts work without passing a quantity: `applyToCart()` counts every unit in the cart, while `applyToItem()` and `applyItemDiscounts()` count the units of each item. Free shipping attached to any single item makes the whole order's shipping free:
+
+```php
+$result = $cartDiscount->applyItemDiscounts($cart);
+
+$result->hasFreeShipping();  // true when any item's discount grants it
+$result->payableTotal(35);   // the cart total plus the shipping still due
+```
 
 <a name="artisan-commands"></a>
 ### Artisan Commands
