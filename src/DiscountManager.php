@@ -12,6 +12,7 @@ use Binafy\LaravelDiscount\Exceptions\DiscountNotActiveException;
 use Binafy\LaravelDiscount\Exceptions\DiscountNotFoundException;
 use Binafy\LaravelDiscount\Exceptions\DiscountNotStartedException;
 use Binafy\LaravelDiscount\Exceptions\DiscountUsageLimitReachedException;
+use Binafy\LaravelDiscount\Exceptions\InvalidDiscountConditionsException;
 use Binafy\LaravelDiscount\Exceptions\MinimumOrderValueException;
 use Binafy\LaravelDiscount\Models\Discount;
 use Binafy\LaravelDiscount\Models\DiscountUsage;
@@ -27,20 +28,101 @@ class DiscountManager
      * Calculate the amount this discount deducts from the given amount.
      * The result never exceeds the amount itself, nor the discount's
      * `max_discount_amount` cap when one is set.
+     *
+     * `$quantity` is the number of items the amount covers. It only
+     * matters for "buy X get Y" discounts, which need to know how many
+     * items are in the basket to work out how many come free.
      */
-    public function calculate(Discount $discount, float $amount): float
+    public function calculate(Discount $discount, float $amount, int $quantity = 1): float
     {
-        $value = (float) $discount->value;
-
-        $discountAmount = $discount->type === DiscountType::Percentage
-            ? $amount * $value / 100
-            : $value;
+        $discountAmount = match ($discount->type) {
+            DiscountType::Percentage => $amount * (float) $discount->value / 100,
+            DiscountType::Fixed => (float) $discount->value,
+            DiscountType::BuyXGetY => $this->calculateBuyXGetY($discount, $amount, $quantity),
+            DiscountType::Tiered => $this->calculateTiered($discount, $amount),
+            DiscountType::FreeShipping => 0.0,
+        };
 
         if (! is_null($discount->max_discount_amount)) {
             $discountAmount = min($discountAmount, (float) $discount->max_discount_amount);
         }
 
         return round(min($discountAmount, $amount), 2);
+    }
+
+    /**
+     * Work out the value of the free items in a "buy X get Y" deal, e.g.
+     * "buy 2, get 1 free". Every full set of X + Y items in the basket
+     * earns Y free items, priced at the basket's average unit price.
+     *
+     * The `conditions` column holds the deal:
+     *
+     *     ['buy' => 2, 'get' => 1, 'get_discount_percentage' => 100, 'max_free_items' => 3]
+     *
+     * `get_discount_percentage` makes the free items merely cheaper
+     * ("buy 2, get the third at 50% off") and defaults to a full 100%.
+     * `max_free_items` caps how many items a single order can get.
+     */
+    protected function calculateBuyXGetY(Discount $discount, float $amount, int $quantity): float
+    {
+        $conditions = $discount->conditions ?? [];
+        $buy = (int) ($conditions['buy'] ?? 0);
+        $get = (int) ($conditions['get'] ?? 0);
+
+        if ($buy < 1 || $get < 1 || $quantity < $buy + $get || $amount <= 0) {
+            return 0.0;
+        }
+
+        $freeItems = intdiv($quantity, $buy + $get) * $get;
+
+        if (! is_null($max = $conditions['max_free_items'] ?? null)) {
+            $freeItems = min($freeItems, max((int) $max, 0));
+        }
+
+        $percentage = (float) ($conditions['get_discount_percentage'] ?? 100);
+        $unitPrice = $amount / $quantity;
+
+        return $freeItems * $unitPrice * $percentage / 100;
+    }
+
+    /**
+     * Work out a tiered discount, where the discount grows with the
+     * order total. The `conditions` column holds the ladder:
+     *
+     *     ['tiers' => [
+     *         ['min' => 1_000_000, 'value' => 5],
+     *         ['min' => 5_000_000, 'value' => 10],
+     *     ]]
+     *
+     * The highest tier the amount reaches wins; an amount below every
+     * tier gets nothing. A tier discounts by percentage unless it sets
+     * `'type' => 'fixed'`.
+     */
+    protected function calculateTiered(Discount $discount, float $amount): float
+    {
+        $tier = $this->matchingTier($discount, $amount);
+
+        if (is_null($tier)) {
+            return 0.0;
+        }
+
+        $value = (float) ($tier['value'] ?? 0);
+
+        return ($tier['type'] ?? DiscountType::Percentage->value) === DiscountType::Fixed->value
+            ? $value
+            : $amount * $value / 100;
+    }
+
+    /**
+     * The highest tier the given amount reaches, or null when the amount
+     * is below every tier.
+     */
+    public function matchingTier(Discount $discount, float $amount): ?array
+    {
+        return collect(($discount->conditions ?? [])['tiers'] ?? [])
+            ->filter(fn ($tier) => is_array($tier) && $amount >= (float) ($tier['min'] ?? 0))
+            ->sortByDesc(fn ($tier) => (float) ($tier['min'] ?? 0))
+            ->first();
     }
 
     /**
@@ -82,6 +164,40 @@ class DiscountManager
         if (! is_null($discount->min_order_value) && $orderAmount < (float) $discount->min_order_value) {
             throw MinimumOrderValueException::for($discount);
         }
+
+        $this->validateConditions($discount);
+    }
+
+    /**
+     * Ensure the types configured through the `conditions` column are
+     * configured correctly, so a malformed discount fails loudly instead
+     * of quietly deducting nothing.
+     *
+     * @throws InvalidDiscountConditionsException
+     */
+    protected function validateConditions(Discount $discount): void
+    {
+        if (! $discount->type->usesConditions()) {
+            return;
+        }
+
+        $conditions = $discount->conditions ?? [];
+
+        $valid = match ($discount->type) {
+            DiscountType::BuyXGetY => (int) ($conditions['buy'] ?? 0) >= 1
+                && (int) ($conditions['get'] ?? 0) >= 1,
+            DiscountType::Tiered => is_array($conditions['tiers'] ?? null)
+                && $conditions['tiers'] !== []
+                && collect($conditions['tiers'])->every(
+                    fn ($tier) => is_array($tier) && isset($tier['min'], $tier['value'])
+                        && is_numeric($tier['min']) && is_numeric($tier['value'])
+                ),
+            default => true,
+        };
+
+        if (! $valid) {
+            throw InvalidDiscountConditionsException::for($discount);
+        }
     }
 
     /**
@@ -119,9 +235,9 @@ class DiscountManager
      *
      * @throws DiscountException
      */
-    public function applyCode(string $code, float $amount, Model|int|null $user = null, ?string $sessionId = null): DiscountResult
+    public function applyCode(string $code, float $amount, Model|int|null $user = null, ?string $sessionId = null, int $quantity = 1): DiscountResult
     {
-        return $this->apply($this->findByCode($code), $amount, $user, $sessionId);
+        return $this->apply($this->findByCode($code), $amount, $user, $sessionId, $quantity);
     }
 
     /**
@@ -145,16 +261,20 @@ class DiscountManager
     /**
      * Validate and apply a single discount to the given amount.
      *
+     * `$quantity` is the number of items the amount covers, which "buy X
+     * get Y" discounts need; every other type ignores it.
+     *
      * @throws DiscountException
      */
-    public function apply(Discount $discount, float $amount, Model|int|null $user = null, ?string $sessionId = null): DiscountResult
+    public function apply(Discount $discount, float $amount, Model|int|null $user = null, ?string $sessionId = null, int $quantity = 1): DiscountResult
     {
         $this->validate($discount, $amount, $user, $sessionId);
 
         $result = new DiscountResult(
             collect([$discount]),
             $amount,
-            $this->calculate($discount, $amount)
+            $this->calculate($discount, $amount, $quantity),
+            $discount->type === DiscountType::FreeShipping
         );
 
         DiscountApplied::dispatch($result, $user);
@@ -167,28 +287,43 @@ class DiscountManager
      * stackable discounts combine, non-stackable discounts compete alone,
      * and whichever combination saves the most wins. Invalid discounts
      * are silently skipped.
+     *
+     * Free shipping discounts sit outside that competition: they deduct
+     * nothing from the amount, so they would always lose it. Every valid
+     * one is applied and raises the result's free shipping flag.
      */
-    public function applyMany(iterable $discounts, float $amount, Model|int|null $user = null, ?string $sessionId = null): DiscountResult
+    public function applyMany(iterable $discounts, float $amount, Model|int|null $user = null, ?string $sessionId = null, int $quantity = 1): DiscountResult
     {
         $valid = collect($discounts)->filter(
             fn (Discount $discount) => $this->isValid($discount, $amount, $user, $sessionId)
         );
 
-        [$stackable, $solo] = $valid->partition(fn (Discount $discount) => $discount->is_stackable);
+        [$shipping, $monetary] = $valid->partition(
+            fn (Discount $discount) => $discount->type === DiscountType::FreeShipping
+        );
+
+        [$stackable, $solo] = $monetary->partition(fn (Discount $discount) => $discount->is_stackable);
 
         $stackTotal = round(min(
-            $stackable->sum(fn (Discount $discount) => $this->calculate($discount, $amount)),
+            $stackable->sum(fn (Discount $discount) => $this->calculate($discount, $amount, $quantity)),
             $amount
         ), 2);
 
         $bestSolo = $solo->sortByDesc(
-            fn (Discount $discount) => $this->calculate($discount, $amount)
+            fn (Discount $discount) => $this->calculate($discount, $amount, $quantity)
         )->first();
-        $bestSoloAmount = $bestSolo ? $this->calculate($bestSolo, $amount) : 0.0;
+        $bestSoloAmount = $bestSolo ? $this->calculate($bestSolo, $amount, $quantity) : 0.0;
 
-        $result = $stackable->isNotEmpty() && $stackTotal >= $bestSoloAmount
-            ? new DiscountResult($stackable->values(), $amount, $stackTotal)
-            : new DiscountResult(collect($bestSolo ? [$bestSolo] : []), $amount, $bestSoloAmount);
+        [$winners, $discountAmount] = $stackable->isNotEmpty() && $stackTotal >= $bestSoloAmount
+            ? [$stackable, $stackTotal]
+            : [collect($bestSolo ? [$bestSolo] : []), $bestSoloAmount];
+
+        $result = new DiscountResult(
+            $winners->concat($shipping)->values(),
+            $amount,
+            $discountAmount,
+            $shipping->isNotEmpty()
+        );
 
         if ($result->discounts->isNotEmpty()) {
             DiscountApplied::dispatch($result, $user);
