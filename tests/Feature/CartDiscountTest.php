@@ -136,3 +136,92 @@ test('applies the discounts attached to each item model across the cart', functi
         ->and($result->discounts)->toHaveCount(1)
         ->and($result->discounts->first()->is($laptopDiscount))->toBeTrue();
 });
+
+/*
+|--------------------------------------------------------------------------
+| Buy X Get Y, Tiered & Free Shipping
+|--------------------------------------------------------------------------
+*/
+
+test('buy x get y counts every unit in the cart', function () {
+    Discount::query()->create([
+        'code' => 'CART-BXGY',
+        'type' => DiscountType::BuyXGetY,
+        'conditions' => ['buy' => 2, 'get' => 1],
+    ]);
+
+    $result = $this->cartDiscount->applyToCart($this->cart, 'CART-BXGY');
+
+    // 3 units totalling 1000 average 333.33 each, so one comes free.
+    expect($result->discountAmount)->toBe(333.33)
+        ->and($result->payableAmount())->toBe(666.67);
+});
+
+test('buy x get y counts the units of a single cart item', function () {
+    $discount = Discount::query()->create([
+        'type' => DiscountType::BuyXGetY,
+        'conditions' => ['buy' => 1, 'get' => 1],
+    ]);
+
+    $mouseItem = $this->cart->items()->where('itemable_id', $this->mouse->id)->first();
+
+    // Mouse subtotal: 2 x 100 = 200, so the second one comes free.
+    expect($this->cartDiscount->applyToItem($mouseItem, $discount)->discountAmount)->toBe(100.0);
+});
+
+test('a tiered discount reads the cart total', function () {
+    Discount::query()->create([
+        'code' => 'CART-TIERS',
+        'type' => DiscountType::Tiered,
+        'conditions' => ['tiers' => [
+            ['min' => 500, 'value' => 5],
+            ['min' => 900, 'value' => 10],
+        ]],
+    ]);
+
+    // Cart total of 1000 reaches the top tier.
+    expect($this->cartDiscount->applyToCart($this->cart, 'CART-TIERS')->discountAmount)->toBe(100.0);
+});
+
+test('free shipping on a cart raises the flag without changing the total', function () {
+    Discount::query()->create([
+        'code' => 'CART-SHIP',
+        'type' => DiscountType::FreeShipping,
+    ]);
+
+    $result = $this->cartDiscount->applyToCart($this->cart, 'CART-SHIP');
+
+    expect($result->hasFreeShipping())->toBeTrue()
+        ->and($result->payableAmount())->toBe(1000.0)
+        ->and($result->payableTotal(50))->toBe(1000.0);
+});
+
+test('free shipping attached to one product frees the whole order', function () {
+    $shipping = Discount::query()->create([
+        'code' => 'ITEM-SHIP',
+        'type' => DiscountType::FreeShipping,
+    ]);
+
+    $this->mouse->discounts()->attach($shipping);
+
+    $result = $this->cartDiscount->applyItemDiscounts($this->cart);
+
+    expect($result->hasFreeShipping())->toBeTrue()
+        ->and($result->originalAmount)->toBe(1000.0)
+        ->and($result->discountAmount)->toBe(0.0);
+});
+
+test('buy x get y attached to a product uses that item quantity', function () {
+    $discount = Discount::query()->create([
+        'type' => DiscountType::BuyXGetY,
+        'conditions' => ['buy' => 1, 'get' => 1],
+    ]);
+
+    $this->mouse->discounts()->attach($discount);
+
+    $result = $this->cartDiscount->applyItemDiscounts($this->cart);
+
+    // Only the two mice qualify; the single laptop does not.
+    expect($result->discountAmount)->toBe(100.0)
+        ->and($result->payableAmount())->toBe(900.0);
+});
