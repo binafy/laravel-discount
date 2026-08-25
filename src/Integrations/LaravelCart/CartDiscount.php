@@ -17,7 +17,8 @@ class CartDiscount
 
     /**
      * Apply the given discounts (models, a code string, or a list) to the
-     * whole cart total, resolving stacking rules.
+     * whole cart total, resolving stacking rules. "Buy X get Y" discounts
+     * count every unit in the cart.
      *
      * @throws DiscountNotFoundException When a code string does not exist.
      */
@@ -26,7 +27,9 @@ class CartDiscount
         return $this->manager->applyMany(
             $this->resolveDiscounts($discounts),
             $cart->calculatedPriceByQuantity(),
-            $user ?? $cart->user_id
+            $user ?? $cart->user_id,
+            null,
+            (int) $cart->items()->sum('quantity')
         );
     }
 
@@ -38,29 +41,34 @@ class CartDiscount
      */
     public function applyToItem(CartItem $item, Discount|iterable|string $discounts, Model|int|null $user = null): DiscountResult
     {
-        $subtotal = (int) $item->quantity * (float) $item->itemable->getPrice();
+        $quantity = (int) $item->quantity;
 
         return $this->manager->applyMany(
             $this->resolveDiscounts($discounts),
-            $subtotal,
-            $user ?? $item->cart?->user_id
+            $quantity * (float) $item->itemable->getPrice(),
+            $user ?? $item->cart?->user_id,
+            null,
+            $quantity
         );
     }
 
     /**
      * Walk the cart and apply, per item, the valid discounts attached to
      * its model through the HasDiscounts trait. Items whose model has no
-     * discounts are counted at full price.
+     * discounts are counted at full price. A free shipping discount on
+     * any single item makes the whole order's shipping free.
      */
     public function applyItemDiscounts(Cart $cart, Model|int|null $user = null): DiscountResult
     {
         $user ??= $cart->user_id;
         $originalTotal = 0.0;
         $discountTotal = 0.0;
+        $freeShipping = false;
         $applied = collect();
 
         foreach ($cart->items()->with('itemable')->get() as $item) {
-            $subtotal = (int) $item->quantity * (float) $item->itemable->getPrice();
+            $quantity = (int) $item->quantity;
+            $subtotal = $quantity * (float) $item->itemable->getPrice();
             $originalTotal += $subtotal;
 
             if (! method_exists($item->itemable, 'discounts')) {
@@ -70,17 +78,21 @@ class CartDiscount
             $result = $this->manager->applyMany(
                 $item->itemable->discounts()->valid()->get(),
                 $subtotal,
-                $user
+                $user,
+                null,
+                $quantity
             );
 
             $discountTotal += $result->discountAmount;
+            $freeShipping = $freeShipping || $result->freeShipping;
             $applied = $applied->merge($result->discounts);
         }
 
         return new DiscountResult(
             $applied->unique('id')->values(),
             round($originalTotal, 2),
-            round($discountTotal, 2)
+            round($discountTotal, 2),
+            $freeShipping
         );
     }
 

@@ -19,7 +19,7 @@ use Illuminate\Support\Carbon;
  * @property string $value
  * @property string|null $max_discount_amount Cap for the calculated discount, e.g. "20% but at most 100".
  * @property string|null $min_order_value
- * @property array|null $conditions
+ * @property array|null $conditions Extra configuration, e.g. the "buy X get Y" deal or the tier ladder.
  * @property int|null $usage_limit
  * @property int|null $usage_limit_per_user
  * @property int $used_count
@@ -36,6 +36,7 @@ use Illuminate\Support\Carbon;
  * @method static Builder|Discount notExpired()
  * @method static Builder|Discount withRemainingUsages()
  * @method static Builder|Discount valid()
+ * @method static Builder|Discount ofType(DiscountType|string $type)
  */
 class Discount extends Model
 {
@@ -68,6 +69,7 @@ class Discount extends Model
      * @var array<string, mixed>
      */
     protected $attributes = [
+        'value' => 0,
         'used_count' => 0,
         'is_stackable' => false,
         'is_active' => true,
@@ -175,6 +177,14 @@ class Discount extends Model
     }
 
     /**
+     * Scope the query to discounts of the given type.
+     */
+    public function scopeOfType(Builder $query, DiscountType|string $type): Builder
+    {
+        return $query->where('type', $type instanceof DiscountType ? $type->value : $type);
+    }
+
+    /**
      * Scope the query to discounts that are currently applicable:
      * active, inside their time window, and not exhausted.
      */
@@ -203,6 +213,15 @@ class Discount extends Model
     public function isExpired(): bool
     {
         return ! is_null($this->expires_at) && $this->expires_at->isPast();
+    }
+
+    /**
+     * Determine if the discount grants free shipping rather than
+     * deducting an amount.
+     */
+    public function isFreeShipping(): bool
+    {
+        return $this->type === DiscountType::FreeShipping;
     }
 
     /**
