@@ -734,6 +734,19 @@ For guests, pass a session id instead of a user:
 'code' => ['required', new ValidDiscountCode($total, sessionId: session()->getId())],
 ```
 
+A discount with [conditions](#condition-engine) is only judged fairly if the rule can see the order, so hand it the same `quantity` and `payload` you would hand `applyCode()` — otherwise a cart of five items looks like a cart of one and the code is rejected for no reason:
+
+```php
+'code' => ['required', new ValidDiscountCode(
+    orderAmount: $this->cartTotal(),
+    user: $this->user(),
+    quantity: $this->cart()->items->sum('quantity'),
+    payload: ['items' => $this->cart()->items->pluck('product')],
+)],
+```
+
+The message is the failing condition's own, so the customer reads "This discount requires at least 2 items." rather than a generic refusal.
+
 <a name="validation--exceptions"></a>
 ### Validation & Exceptions
 
