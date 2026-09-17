@@ -73,10 +73,14 @@ return [
     | implementing `Binafy\LaravelDiscount\Contracts\DiscountCondition` —
     | add your own here to store them by name rather than by class name.
     |
-    | `first_purchase` tells the bundled condition where purchases are
-    | recorded, usually your Order model and its buyer column. `category`
-    | tells the bundled condition where to read an item's category, in dot
-    | notation (e.g. "category.id" to follow a relation).
+    | `first_purchase` tells the bundled condition how to count a user's
+    | purchases: the simple way is your Order model and its buyer column,
+    | and `count_using` takes over when counting is your application's own
+    | business (only paid orders count, or the number comes from elsewhere)
+    | — name an invokable class here, or register a closure with
+    | `FirstPurchaseCondition::countUsing()`. `category` tells the bundled
+    | condition where to read an item's category, in dot notation (e.g.
+    | "category.id" to follow a relation).
     |
     */
     'conditions' => [
@@ -89,6 +93,7 @@ return [
         'first_purchase' => [
             'model' => null,
             'column' => 'user_id',
+            'count_using' => null,
         ],
 
         'category' => [

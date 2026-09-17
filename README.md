@@ -534,7 +534,7 @@ LaravelDiscount::conditions($discount); // Collection<DiscountCondition>
 
 It reads each item's `category_id`; change that globally in the config file, or per rule with `'attribute' => 'category.id'` (dot notation follows relations). An order with no items never matches, since there is nothing to check.
 
-**First purchase** — tell the package where purchases are recorded:
+**First purchase** — the rule behind every `WELCOME10`. The package cannot know what your shop counts as a purchase, so you tell it. The quick way is to name the model that records one:
 
 ```php
 // config/laravel-discount.php
@@ -554,7 +554,45 @@ It reads each item's `category_id`; change that globally in the config file, or 
 ]],
 ```
 
-> Guests never pass this rule: with no user to look up, a first purchase cannot be proven.
+That counts every row, which is rarely the whole story — an abandoned order is not a purchase, and the number may not even live in your database. So counting can be handed back to the application with a callback. It receives the `DiscountContext` and returns how many purchases the user has made:
+
+```php
+// in a service provider
+use Binafy\LaravelDiscount\Conditions\FirstPurchaseCondition;
+use Binafy\LaravelDiscount\Support\DiscountContext;
+
+FirstPurchaseCondition::countUsing(fn (DiscountContext $context) => Order::query()
+    ->where('user_id', $context->userId())
+    ->where('status', OrderStatus::Paid)
+    ->count());
+```
+
+A closure cannot survive `config:cache`, so the config file takes an invokable class instead — as does a single rule, when one discount counts differently from the rest:
+
+```php
+class CountPaidOrders
+{
+    public function __invoke(DiscountContext $context): int
+    {
+        return Order::query()->where('user_id', $context->userId())->paid()->count();
+    }
+}
+```
+
+```php
+// config/laravel-discount.php
+'conditions' => ['first_purchase' => ['count_using' => \App\Discounts\CountPaidOrders::class]],
+```
+
+```php
+'conditions' => ['rules' => [
+    ['type' => 'first_purchase', 'count_using' => \App\Discounts\CountPaidOrders::class],
+]],
+```
+
+A rule's `count_using` wins over the config file's, which wins over `countUsing()`, which wins over the `model` query. Without any of them the rule throws `InvalidDiscountConditionsException` rather than quietly letting everyone through.
+
+> Guests never pass the model query: with no user to look up, a first purchase cannot be proven. A callback decides for itself — it can recognise a returning guest by the e-mail or session you put in the payload.
 
 **Minimum item count** — counts the `quantity` handed to the manager:
 
