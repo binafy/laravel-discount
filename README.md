@@ -19,6 +19,7 @@ The `Laravel-Discount` is a Laravel package designed to handle discounts in your
 - Tiered Discounts: Grow the discount with the order total, e.g. 5% over 1,000,000 and 10% over 5,000,000.
 - Free Shipping: Waive the shipping cost instead of deducting from the total.
 - Conditional Discounts: Set conditions for discounts, such as minimum order value or specific product categories.
+- Condition Engine: Store reusable rules on a discount — category, first purchase, minimum item count — or write your own.
 - Discount Codes: Generate and manage discount codes for your customers.
 - Expiry Dates: Set expiration dates for discounts to create time-limited offers.
 - Usage Limits: Restrict the number of times a discount can be used.
@@ -53,6 +54,10 @@ The `Laravel-Discount` is a Laravel package designed to handle discounts in your
   - [Conditional Discounts](#conditional-discounts)
     - [Minimum Order Value](#minimum-order-value)
     - [Attach Discounts to Models](#attach-discounts-to-models)
+  - [Condition Engine](#condition-engine)
+    - [Bundled Conditions](#bundled-conditions)
+    - [Combining Rules](#combining-rules)
+    - [Writing Your Own Condition](#writing-your-own-condition)
   - [Stackable Discounts](#stackable-discounts)
   - [Form Request Validation](#form-request-validation)
   - [Validation & Exceptions](#validation--exceptions)
@@ -430,7 +435,7 @@ LaravelDiscount::applyCode('BIG-SPENDER', 300); // throws MinimumOrderValueExcep
 LaravelDiscount::applyCode('BIG-SPENDER', 800); // OK
 ```
 
-The `conditions` JSON column also configures the [Buy X Get Y](#buy-x-get-y) and [Tiered](#tiered-discount) types, and is otherwise free for your own arbitrary condition data.
+The `conditions` JSON column also configures the [Buy X Get Y](#buy-x-get-y) and [Tiered](#tiered-discount) types, and hosts the rules of the [Condition Engine](#condition-engine).
 
 <a name="attach-discounts-to-models"></a>
 #### Attach Discounts to Models
@@ -455,6 +460,197 @@ $product->hasDiscount('TECH10');  // by code or by model instance
 // Apply all attached valid discounts to a price (stacking rules included)
 $result = $product->applyDiscounts($product->price);
 $result->payableAmount();
+```
+
+<a name="condition-engine"></a>
+### Condition Engine
+
+The `conditions` column is not just storage — the rules you put in `conditions.rules` are evaluated on every `validate()`, `isValid()` and `apply*()` call. A discount whose rules are not met is invalid, exactly like an expired one:
+
+```php
+$discount = Discount::query()->create([
+    'code' => 'WELCOME10',
+    'type' => DiscountType::Percentage,
+    'value' => 10,
+    'conditions' => ['rules' => [
+        ['type' => 'first_purchase'],
+        ['type' => 'minimum_item_count', 'count' => 2],
+    ]],
+]);
+
+LaravelDiscount::apply($discount, 500, $user, quantity: 1);
+// throws DiscountConditionFailedException: "This discount requires at least 2 items."
+```
+
+Conditions read an order through a `DiscountContext`, so pass what they need. The `quantity` argument feeds item-count rules, and the `payload` argument carries everything else — most often the order's items:
+
+```php
+$result = LaravelDiscount::apply(
+    $discount,
+    $order->total,
+    $user,
+    quantity: $order->items->sum('quantity'),
+    payload: ['items' => $order->items->pluck('product')],
+);
+```
+
+> The [Laravel Cart integration](#laravel-cart-integration) fills both in for you.
+
+The exception names the rule that failed, so you can tell the customer why:
+
+```php
+use Binafy\LaravelDiscount\Exceptions\DiscountConditionFailedException;
+
+try {
+    $result = LaravelDiscount::applyCode($code, $total, $user, quantity: $count, payload: ['items' => $items]);
+} catch (DiscountConditionFailedException $e) {
+    return back()->withErrors($e->getMessage()); // e.g. "This discount is only available on your first purchase."
+}
+```
+
+To inspect the rules without applying anything — to render them on the coupon, say:
+
+```php
+LaravelDiscount::conditions($discount); // Collection<DiscountCondition>
+```
+
+<a name="bundled-conditions"></a>
+#### Bundled Conditions
+
+| Alias                | Class                        | Passes when                                                     |
+|----------------------|------------------------------|-----------------------------------------------------------------|
+| `category`           | `CategoryCondition`          | The order's items belong to the given categories                |
+| `first_purchase`     | `FirstPurchaseCondition`     | The user has no purchase on record yet                          |
+| `minimum_item_count` | `MinimumItemCountCondition`  | The order carries at least the given number of items            |
+
+**Category** — limits a discount to certain categories:
+
+```php
+'conditions' => ['rules' => [
+    ['type' => 'category', 'categories' => [7, 9]],              // any item in 7 or 9
+    ['type' => 'category', 'categories' => [7], 'match' => 'all'], // every item in 7
+]],
+```
+
+It reads each item's `category_id`; change that globally in the config file, or per rule with `'attribute' => 'category.id'` (dot notation follows relations). An order with no items never matches, since there is nothing to check.
+
+**First purchase** — tell the package where purchases are recorded:
+
+```php
+// config/laravel-discount.php
+'conditions' => [
+    'first_purchase' => [
+        'model' => \App\Models\Order::class,
+        'column' => 'user_id',
+    ],
+],
+```
+
+```php
+'conditions' => ['rules' => [
+    ['type' => 'first_purchase'],
+    // or override the model for this rule only:
+    ['type' => 'first_purchase', 'model' => \App\Models\Subscription::class, 'column' => 'user_id'],
+]],
+```
+
+> Guests never pass this rule: with no user to look up, a first purchase cannot be proven.
+
+**Minimum item count** — counts the `quantity` handed to the manager:
+
+```php
+'conditions' => ['rules' => [['type' => 'minimum_item_count', 'count' => 3]]],
+```
+
+<a name="combining-rules"></a>
+#### Combining Rules
+
+Every rule must pass by default. Set `rules_match` to `any` when one is enough:
+
+```php
+'conditions' => [
+    'rules_match' => 'any',
+    'rules' => [
+        ['type' => 'category', 'categories' => [7]],
+        ['type' => 'minimum_item_count', 'count' => 5],
+    ],
+],
+```
+
+Rules sit alongside the configuration of [Buy X Get Y](#buy-x-get-y) and [Tiered](#tiered-discount) discounts, so the two can be combined freely:
+
+```php
+'conditions' => [
+    'tiers' => [['min' => 1_000_000, 'value' => 5]],
+    'rules' => [['type' => 'first_purchase']],
+],
+```
+
+<a name="writing-your-own-condition"></a>
+#### Writing Your Own Condition
+
+Implement `DiscountCondition`. `fromArray()` rebuilds the condition from its stored JSON, `passes()` decides, and `message()` explains a refusal to the customer:
+
+```php
+use Binafy\LaravelDiscount\Contracts\DiscountCondition;
+use Binafy\LaravelDiscount\Support\DiscountContext;
+
+class WeekendOnlyCondition implements DiscountCondition
+{
+    public function __construct(protected array $days = ['Saturday', 'Sunday']) {}
+
+    public static function fromArray(array $config): static
+    {
+        return new static($config['days'] ?? ['Saturday', 'Sunday']);
+    }
+
+    public function passes(DiscountContext $context): bool
+    {
+        return in_array(now()->englishDayOfWeek, $this->days);
+    }
+
+    public function message(): string
+    {
+        return 'This discount only runs at the weekend.';
+    }
+}
+```
+
+Register an alias so it can be stored by name:
+
+```php
+// config/laravel-discount.php
+'conditions' => [
+    'aliases' => [
+        'weekend_only' => \App\Discounts\WeekendOnlyCondition::class,
+    ],
+],
+```
+
+```php
+// or at runtime, e.g. in a service provider
+use Binafy\LaravelDiscount\Support\ConditionFactory;
+
+ConditionFactory::register('weekend_only', WeekendOnlyCondition::class);
+```
+
+```php
+'conditions' => ['rules' => [['type' => 'weekend_only', 'days' => ['Friday']]]],
+```
+
+An alias is optional — a fully qualified class name works as the `type` too. Anything else is rejected with `InvalidDiscountConditionsException`.
+
+Inside `passes()`, the context gives you the whole picture:
+
+```php
+$context->discount;    // the Discount being validated
+$context->amount;      // the order amount
+$context->user;        // the user model or id, may be null
+$context->userId();    // the id, or null for a guest
+$context->sessionId;   // the guest session, may be null
+$context->quantity;    // how many items the amount covers
+$context->items();     // Collection of the payload's items
+$context->get('key');  // any other payload value, dot notation supported
 ```
 
 <a name="stackable-discounts"></a>
@@ -513,7 +709,8 @@ Every failure case has its own exception, all extending `Binafy\LaravelDiscount\
 | `DiscountExpiredException`           | `expires_at` is in the past                    |
 | `DiscountUsageLimitReachedException` | The total or per-user usage limit is reached   |
 | `MinimumOrderValueException`         | The order total is below `min_order_value`     |
-| `InvalidDiscountConditionsException` | A "buy X get Y" or tiered discount is misconfigured |
+| `InvalidDiscountConditionsException` | A "buy X get Y", tiered, or condition rule is misconfigured |
+| `DiscountConditionFailedException`   | The order does not meet the discount's conditions |
 
 Each exception carries the discount that failed, so you can handle every case separately:
 
@@ -575,7 +772,7 @@ $result = $cartDiscount->applyItemDiscounts($cart);
 
 The cart total is checked against `min_order_value`, and the cart's user is used for per-user usage limits automatically.
 
-Item quantities are counted for you, so [Buy X Get Y](#buy-x-get-y) discounts work without passing a quantity: `applyToCart()` counts every unit in the cart, while `applyToItem()` and `applyItemDiscounts()` count the units of each item. Free shipping attached to any single item makes the whole order's shipping free:
+Item quantities and items are collected for you, so [Buy X Get Y](#buy-x-get-y) discounts and the [Condition Engine](#condition-engine) work without passing anything extra: `applyToCart()` counts every unit in the cart and hands over every item model, while `applyToItem()` and `applyItemDiscounts()` scope both to the item at hand. Free shipping attached to any single item makes the whole order's shipping free:
 
 ```php
 $result = $cartDiscount->applyItemDiscounts($cart);

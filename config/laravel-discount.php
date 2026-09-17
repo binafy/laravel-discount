@@ -1,6 +1,9 @@
 <?php
 
 use App\Models\User;
+use Binafy\LaravelDiscount\Conditions\CategoryCondition;
+use Binafy\LaravelDiscount\Conditions\FirstPurchaseCondition;
+use Binafy\LaravelDiscount\Conditions\MinimumItemCountCondition;
 
 return [
     /*
@@ -58,6 +61,39 @@ return [
     */
     'discountables' => [
         'table' => 'discountables',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Conditions
+    |--------------------------------------------------------------------------
+    |
+    | The condition engine behind a discount's `conditions.rules` array.
+    | `aliases` maps the short `type` stored in the database to a class
+    | implementing `Binafy\LaravelDiscount\Contracts\DiscountCondition` —
+    | add your own here to store them by name rather than by class name.
+    |
+    | `first_purchase` tells the bundled condition where purchases are
+    | recorded, usually your Order model and its buyer column. `category`
+    | tells the bundled condition where to read an item's category, in dot
+    | notation (e.g. "category.id" to follow a relation).
+    |
+    */
+    'conditions' => [
+        'aliases' => [
+            'category' => CategoryCondition::class,
+            'first_purchase' => FirstPurchaseCondition::class,
+            'minimum_item_count' => MinimumItemCountCondition::class,
+        ],
+
+        'first_purchase' => [
+            'model' => null,
+            'column' => 'user_id',
+        ],
+
+        'category' => [
+            'attribute' => 'category_id',
+        ],
     ],
 
     /*

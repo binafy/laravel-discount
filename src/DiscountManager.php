@@ -2,10 +2,12 @@
 
 namespace Binafy\LaravelDiscount;
 
+use Binafy\LaravelDiscount\Contracts\DiscountCondition;
 use Binafy\LaravelDiscount\Enums\DiscountType;
 use Binafy\LaravelDiscount\Events\DiscountApplied;
 use Binafy\LaravelDiscount\Events\DiscountExpired;
 use Binafy\LaravelDiscount\Events\DiscountRedeemed;
+use Binafy\LaravelDiscount\Exceptions\DiscountConditionFailedException;
 use Binafy\LaravelDiscount\Exceptions\DiscountException;
 use Binafy\LaravelDiscount\Exceptions\DiscountExpiredException;
 use Binafy\LaravelDiscount\Exceptions\DiscountNotActiveException;
@@ -16,7 +18,9 @@ use Binafy\LaravelDiscount\Exceptions\InvalidDiscountConditionsException;
 use Binafy\LaravelDiscount\Exceptions\MinimumOrderValueException;
 use Binafy\LaravelDiscount\Models\Discount;
 use Binafy\LaravelDiscount\Models\DiscountUsage;
+use Binafy\LaravelDiscount\Support\ConditionFactory;
 use Binafy\LaravelDiscount\Support\DiscountCodeGenerator;
+use Binafy\LaravelDiscount\Support\DiscountContext;
 use Binafy\LaravelDiscount\Support\DiscountResult;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -128,9 +132,14 @@ class DiscountManager
     /**
      * Ensure the discount is applicable, or throw a specific exception.
      *
+     * `$quantity` and `$payload` describe the order being discounted and are
+     * handed to the discount's conditions; see `conditions.rules`.
+     *
+     * @param  array<string, mixed>  $payload
+     *
      * @throws DiscountException
      */
-    public function validate(Discount $discount, float $orderAmount = 0, Model|int|null $user = null, ?string $sessionId = null): void
+    public function validate(Discount $discount, float $orderAmount = 0, Model|int|null $user = null, ?string $sessionId = null, int $quantity = 1, array $payload = []): void
     {
         if (! $discount->is_active) {
             throw DiscountNotActiveException::for($discount);
@@ -166,6 +175,47 @@ class DiscountManager
         }
 
         $this->validateConditions($discount);
+
+        $this->evaluateConditions(
+            $discount,
+            new DiscountContext($discount, $orderAmount, $user, $sessionId, $quantity, $payload)
+        );
+    }
+
+    /**
+     * Run the conditions stored in the discount's `conditions.rules` array
+     * against the order. By default every rule must pass; setting
+     * `conditions.rules_match` to "any" is enough for one of them to.
+     *
+     * @throws DiscountException
+     */
+    protected function evaluateConditions(Discount $discount, DiscountContext $context): void
+    {
+        $conditions = $this->conditions($discount);
+
+        if ($conditions->isEmpty()) {
+            return;
+        }
+
+        $failed = $conditions->reject(fn (DiscountCondition $condition) => $condition->passes($context));
+
+        $matchAny = ($discount->conditions['rules_match'] ?? 'all') === 'any';
+
+        if ($matchAny ? $failed->count() === $conditions->count() : $failed->isNotEmpty()) {
+            throw DiscountConditionFailedException::forCondition($discount, $failed->first());
+        }
+    }
+
+    /**
+     * The conditions stored on the discount, rebuilt as objects.
+     *
+     * @return Collection<int, DiscountCondition>
+     *
+     * @throws DiscountException
+     */
+    public function conditions(Discount $discount): Collection
+    {
+        return app(ConditionFactory::class)->make($discount);
     }
 
     /**
@@ -203,10 +253,10 @@ class DiscountManager
     /**
      * Determine if the discount is applicable, without throwing.
      */
-    public function isValid(Discount $discount, float $orderAmount = 0, Model|int|null $user = null, ?string $sessionId = null): bool
+    public function isValid(Discount $discount, float $orderAmount = 0, Model|int|null $user = null, ?string $sessionId = null, int $quantity = 1, array $payload = []): bool
     {
         try {
-            $this->validate($discount, $orderAmount, $user, $sessionId);
+            $this->validate($discount, $orderAmount, $user, $sessionId, $quantity, $payload);
 
             return true;
         } catch (DiscountException) {
@@ -235,9 +285,9 @@ class DiscountManager
      *
      * @throws DiscountException
      */
-    public function applyCode(string $code, float $amount, Model|int|null $user = null, ?string $sessionId = null, int $quantity = 1): DiscountResult
+    public function applyCode(string $code, float $amount, Model|int|null $user = null, ?string $sessionId = null, int $quantity = 1, array $payload = []): DiscountResult
     {
-        return $this->apply($this->findByCode($code), $amount, $user, $sessionId, $quantity);
+        return $this->apply($this->findByCode($code), $amount, $user, $sessionId, $quantity, $payload);
     }
 
     /**
@@ -262,13 +312,16 @@ class DiscountManager
      * Validate and apply a single discount to the given amount.
      *
      * `$quantity` is the number of items the amount covers, which "buy X
-     * get Y" discounts need; every other type ignores it.
+     * get Y" discounts need; every other type ignores it. `$payload` carries
+     * anything the discount's conditions need, such as the order's items.
+     *
+     * @param  array<string, mixed>  $payload
      *
      * @throws DiscountException
      */
-    public function apply(Discount $discount, float $amount, Model|int|null $user = null, ?string $sessionId = null, int $quantity = 1): DiscountResult
+    public function apply(Discount $discount, float $amount, Model|int|null $user = null, ?string $sessionId = null, int $quantity = 1, array $payload = []): DiscountResult
     {
-        $this->validate($discount, $amount, $user, $sessionId);
+        $this->validate($discount, $amount, $user, $sessionId, $quantity, $payload);
 
         $result = new DiscountResult(
             collect([$discount]),
@@ -291,11 +344,13 @@ class DiscountManager
      * Free shipping discounts sit outside that competition: they deduct
      * nothing from the amount, so they would always lose it. Every valid
      * one is applied and raises the result's free shipping flag.
+     *
+     * @param  array<string, mixed>  $payload
      */
-    public function applyMany(iterable $discounts, float $amount, Model|int|null $user = null, ?string $sessionId = null, int $quantity = 1): DiscountResult
+    public function applyMany(iterable $discounts, float $amount, Model|int|null $user = null, ?string $sessionId = null, int $quantity = 1, array $payload = []): DiscountResult
     {
         $valid = collect($discounts)->filter(
-            fn (Discount $discount) => $this->isValid($discount, $amount, $user, $sessionId)
+            fn (Discount $discount) => $this->isValid($discount, $amount, $user, $sessionId, $quantity, $payload)
         );
 
         [$shipping, $monetary] = $valid->partition(
