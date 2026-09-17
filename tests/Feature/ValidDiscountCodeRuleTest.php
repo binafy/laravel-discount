@@ -95,3 +95,42 @@ test('respects the session id for guests', function () {
     expect(validateCode('GUEST', new ValidDiscountCode(sessionId: 'session-a'))->fails())->toBeTrue()
         ->and(validateCode('GUEST', new ValidDiscountCode(sessionId: 'session-b'))->passes())->toBeTrue();
 });
+
+test('passes the item count on to the condition engine', function () {
+    Discount::query()->create([
+        'code' => 'BULK10',
+        'type' => DiscountType::Percentage,
+        'value' => 10,
+        'conditions' => ['rules' => [['type' => 'minimum_item_count', 'count' => 2]]],
+    ]);
+
+    expect(validateCode('BULK10', new ValidDiscountCode(500, quantity: 5))->passes())->toBeTrue();
+});
+
+test('fails with the reason a condition gives', function () {
+    Discount::query()->create([
+        'code' => 'BULK10',
+        'type' => DiscountType::Percentage,
+        'value' => 10,
+        'conditions' => ['rules' => [['type' => 'minimum_item_count', 'count' => 2]]],
+    ]);
+
+    $validator = validateCode('BULK10', new ValidDiscountCode(500, quantity: 1));
+
+    expect($validator->fails())->toBeTrue()
+        ->and($validator->errors()->first('code'))->toBe('This discount requires at least 2 items.');
+});
+
+test('passes the order items on to the condition engine', function () {
+    Discount::query()->create([
+        'code' => 'SHOES',
+        'type' => DiscountType::Percentage,
+        'value' => 10,
+        'conditions' => ['rules' => [['type' => 'category', 'categories' => [7]]]],
+    ]);
+
+    $rule = fn (array $items) => new ValidDiscountCode(500, payload: ['items' => $items]);
+
+    expect(validateCode('SHOES', $rule([['category_id' => 7]]))->passes())->toBeTrue()
+        ->and(validateCode('SHOES', $rule([['category_id' => 3]]))->fails())->toBeTrue();
+});
