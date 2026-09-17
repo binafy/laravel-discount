@@ -18,6 +18,7 @@ beforeEach(function () {
             $table->id();
             $table->string('name');
             $table->decimal('price', 15, 2)->default(0);
+            $table->unsignedBigInteger('category_id')->nullable();
             $table->timestamps();
         });
     }
@@ -47,8 +48,8 @@ beforeEach(function () {
         'password' => bcrypt('password'),
     ]);
 
-    $this->laptop = Product::query()->create(['name' => 'Laptop', 'price' => 800]);
-    $this->mouse = Product::query()->create(['name' => 'Mouse', 'price' => 100]);
+    $this->laptop = Product::query()->create(['name' => 'Laptop', 'price' => 800, 'category_id' => 1]);
+    $this->mouse = Product::query()->create(['name' => 'Mouse', 'price' => 100, 'category_id' => 2]);
 
     $this->cart = Cart::query()->create(['user_id' => $this->user->id]);
     $this->cart->items()->create([
@@ -224,4 +225,73 @@ test('buy x get y attached to a product uses that item quantity', function () {
     // Only the two mice qualify; the single laptop does not.
     expect($result->discountAmount)->toBe(100.0)
         ->and($result->payableAmount())->toBe(900.0);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Conditions
+|--------------------------------------------------------------------------
+*/
+
+test('a category condition reads the cart items automatically', function () {
+    Discount::query()->create([
+        'code' => 'ACCESSORIES',
+        'type' => DiscountType::Percentage,
+        'value' => 10,
+        'conditions' => ['rules' => [['type' => 'category', 'categories' => [2]]]],
+    ]);
+
+    // The mouse is in category 2, so the cart qualifies.
+    expect($this->cartDiscount->applyToCart($this->cart, 'ACCESSORIES')->discountAmount)->toBe(100.0);
+});
+
+test('a category condition the cart does not meet is skipped', function () {
+    Discount::query()->create([
+        'code' => 'FURNITURE',
+        'type' => DiscountType::Percentage,
+        'value' => 10,
+        'conditions' => ['rules' => [['type' => 'category', 'categories' => [99]]]],
+    ]);
+
+    expect($this->cartDiscount->applyToCart($this->cart, 'FURNITURE')->discountAmount)->toBe(0.0);
+});
+
+test('a minimum item count condition counts the cart units', function () {
+    Discount::query()->create([
+        'code' => 'BULK',
+        'type' => DiscountType::Percentage,
+        'value' => 10,
+        'conditions' => ['rules' => [['type' => 'minimum_item_count', 'count' => 3]]],
+    ]);
+
+    // The cart holds 3 units: 1 laptop and 2 mice.
+    expect($this->cartDiscount->applyToCart($this->cart, 'BULK')->discountAmount)->toBe(100.0);
+});
+
+test('a condition on a single cart item sees only that item', function () {
+    $discount = Discount::query()->create([
+        'type' => DiscountType::Percentage,
+        'value' => 10,
+        'conditions' => ['rules' => [['type' => 'category', 'categories' => [2]]]],
+    ]);
+
+    $mouseItem = $this->cart->items()->where('itemable_id', $this->mouse->id)->first();
+    $laptopItem = $this->cart->items()->where('itemable_id', $this->laptop->id)->first();
+
+    expect($this->cartDiscount->applyToItem($mouseItem, $discount)->discountAmount)->toBe(20.0)
+        ->and($this->cartDiscount->applyToItem($laptopItem, $discount)->discountAmount)->toBe(0.0);
+});
+
+test('a condition on an attached product discount sees that product', function () {
+    $discount = Discount::query()->create([
+        'type' => DiscountType::Percentage,
+        'value' => 10,
+        'conditions' => ['rules' => [['type' => 'category', 'categories' => [2]]]],
+    ]);
+
+    $this->laptop->discounts()->attach($discount);
+    $this->mouse->discounts()->attach($discount);
+
+    // Only the mouse is in category 2, so only its 200 subtotal is discounted.
+    expect($this->cartDiscount->applyItemDiscounts($this->cart)->discountAmount)->toBe(20.0);
 });
