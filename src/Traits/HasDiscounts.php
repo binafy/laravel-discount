@@ -48,10 +48,20 @@ trait HasDiscounts
     /**
      * Apply the attached valid discounts to the given amount, resolving
      * stacking rules. `$quantity` is the number of items the amount
-     * covers, which "buy X get Y" discounts need.
+     * covers, which "buy X get Y" discounts need, and `$payload` carries
+     * anything the discounts' conditions need.
+     *
+     * @param  array<string, mixed>  $payload
      */
-    public function applyDiscounts(float $amount, Model|int|null $user = null, int $quantity = 1): DiscountResult
+    public function applyDiscounts(float $amount, Model|int|null $user = null, int $quantity = 1, array $payload = []): DiscountResult
     {
-        return app(DiscountManager::class)->applyMany($this->validDiscounts(), $amount, $user, null, $quantity);
+        return app(DiscountManager::class)->applyMany(
+            $this->validDiscounts(),
+            $amount,
+            $user,
+            null,
+            $quantity,
+            $payload + ['items' => [$this]]
+        );
     }
 }
