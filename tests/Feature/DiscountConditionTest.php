@@ -41,7 +41,11 @@ beforeEach(function () {
     }
 });
 
-afterEach(fn () => ConditionFactory::flushAliases());
+afterEach(function () {
+    ConditionFactory::flushAliases();
+    FirstPurchaseCondition::countUsing(null);
+    PaidOrderCounter::$count = 0;
+});
 
 function makeConditional(array $rules, array $attributes = []): Discount
 {
@@ -211,11 +215,11 @@ test('first purchase never passes for a guest', function () {
     expect($this->manager->isValid($discount, 500, sessionId: 'guest-session'))->toBeFalse();
 });
 
-test('first purchase complains when no purchase model is configured', function () {
+test('first purchase complains when there is no way to count purchases', function () {
     config()->set('laravel-discount.conditions.first_purchase.model', null);
 
     $this->manager->validate(makeConditional([['type' => 'first_purchase']]), 500, makeConditionUser());
-})->throws(InvalidDiscountConditionsException::class, 'The first purchase condition needs a purchase model.');
+})->throws(InvalidDiscountConditionsException::class, 'The first purchase condition needs a way to count purchases.');
 
 test('first purchase can override the model per rule', function () {
     $user = makeConditionUser();
@@ -230,6 +234,110 @@ test('first purchase can override the model per rule', function () {
 
     expect($this->manager->isValid($discount, 500, $user))->toBeFalse();
 });
+
+test('first purchase counts purchases with the application callback', function () {
+    $counted = 0;
+
+    FirstPurchaseCondition::countUsing(function (DiscountContext $context) use (&$counted) {
+        $counted++;
+
+        return TestOrder::query()->where('user_id', $context->userId())->count();
+    });
+
+    $user = makeConditionUser();
+    $discount = makeConditional([['type' => 'first_purchase']]);
+
+    expect($this->manager->isValid($discount, 500, $user))->toBeTrue();
+
+    TestOrder::query()->create(['user_id' => $user->id]);
+
+    expect($this->manager->isValid($discount, 500, $user))->toBeFalse()
+        ->and($counted)->toBe(2);
+});
+
+test('the callback wins over the configured model', function () {
+    config()->set('laravel-discount.conditions.first_purchase.model', TestOrder::class);
+
+    $user = makeConditionUser();
+    TestOrder::query()->create(['user_id' => $user->id]);
+
+    // The order exists, but the application does not count it as a purchase.
+    FirstPurchaseCondition::countUsing(fn () => 0);
+
+    expect($this->manager->isValid(makeConditional([['type' => 'first_purchase']]), 500, $user))->toBeTrue();
+});
+
+test('the callback needs no purchase model at all', function () {
+    config()->set('laravel-discount.conditions.first_purchase.model', null);
+
+    FirstPurchaseCondition::countUsing(fn () => 3);
+
+    expect($this->manager->isValid(makeConditional([['type' => 'first_purchase']]), 500, makeConditionUser()))->toBeFalse();
+});
+
+test('the callback receives the whole context', function () {
+    $seen = null;
+
+    FirstPurchaseCondition::countUsing(function (DiscountContext $context) use (&$seen) {
+        $seen = $context;
+
+        return 0;
+    });
+
+    $user = makeConditionUser();
+    $discount = makeConditional([['type' => 'first_purchase']]);
+
+    $this->manager->isValid($discount, 750, $user, quantity: 4, payload: ['channel' => 'mobile']);
+
+    expect($seen)->toBeInstanceOf(DiscountContext::class)
+        ->and($seen->userId())->toBe($user->id)
+        ->and($seen->amount)->toBe(750.0)
+        ->and($seen->quantity)->toBe(4)
+        ->and($seen->get('channel'))->toBe('mobile')
+        ->and($seen->discount->is($discount))->toBeTrue();
+});
+
+test('the callback decides for itself what a guest is', function () {
+    FirstPurchaseCondition::countUsing(
+        fn (DiscountContext $context) => $context->get('guest_email') === 'newcomer@example.com' ? 0 : 1
+    );
+
+    $discount = makeConditional([['type' => 'first_purchase']]);
+
+    expect($this->manager->isValid($discount, 500, payload: ['guest_email' => 'newcomer@example.com']))->toBeTrue()
+        ->and($this->manager->isValid($discount, 500, payload: ['guest_email' => 'buyer@example.com']))->toBeFalse();
+});
+
+test('an invokable class can count purchases from the config file', function () {
+    config()->set('laravel-discount.conditions.first_purchase.count_using', PaidOrderCounter::class);
+
+    $user = makeConditionUser();
+    $discount = makeConditional([['type' => 'first_purchase']]);
+
+    expect($this->manager->isValid($discount, 500, $user))->toBeTrue();
+
+    PaidOrderCounter::$count = 2;
+
+    expect($this->manager->isValid($discount, 500, $user))->toBeFalse();
+});
+
+test('an invokable class can count purchases for one rule only', function () {
+    PaidOrderCounter::$count = 1;
+
+    $discount = makeConditional([
+        ['type' => 'first_purchase', 'count_using' => PaidOrderCounter::class],
+    ]);
+
+    expect($this->manager->isValid($discount, 500, makeConditionUser()))->toBeFalse();
+});
+
+test('a count_using that is not invokable is rejected', function () {
+    $discount = makeConditional([
+        ['type' => 'first_purchase', 'count_using' => TestOrder::class],
+    ]);
+
+    $this->manager->validate($discount, 500, makeConditionUser());
+})->throws(InvalidDiscountConditionsException::class, 'must be an invokable class');
 
 /*
 |--------------------------------------------------------------------------
@@ -401,6 +509,16 @@ class TestOrder extends Model
     protected $table = 'orders';
 
     protected $fillable = ['user_id'];
+}
+
+class PaidOrderCounter
+{
+    public static int $count = 0;
+
+    public function __invoke(DiscountContext $context): int
+    {
+        return static::$count;
+    }
 }
 
 class WeekendOnlyCondition implements DiscountCondition
