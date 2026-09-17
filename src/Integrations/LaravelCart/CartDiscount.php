@@ -18,7 +18,8 @@ class CartDiscount
     /**
      * Apply the given discounts (models, a code string, or a list) to the
      * whole cart total, resolving stacking rules. "Buy X get Y" discounts
-     * count every unit in the cart.
+     * count every unit in the cart, and the cart's item models are handed
+     * to the discounts' conditions.
      *
      * @throws DiscountNotFoundException When a code string does not exist.
      */
@@ -29,7 +30,8 @@ class CartDiscount
             $cart->calculatedPriceByQuantity(),
             $user ?? $cart->user_id,
             null,
-            (int) $cart->items()->sum('quantity')
+            (int) $cart->items()->sum('quantity'),
+            ['items' => $cart->items()->with('itemable')->get()->pluck('itemable')->all(), 'cart' => $cart]
         );
     }
 
@@ -48,7 +50,8 @@ class CartDiscount
             $quantity * (float) $item->itemable->getPrice(),
             $user ?? $item->cart?->user_id,
             null,
-            $quantity
+            $quantity,
+            ['items' => [$item->itemable], 'cart_item' => $item]
         );
     }
 
@@ -80,7 +83,8 @@ class CartDiscount
                 $subtotal,
                 $user,
                 null,
-                $quantity
+                $quantity,
+                ['items' => [$item->itemable], 'cart_item' => $item]
             );
 
             $discountTotal += $result->discountAmount;
