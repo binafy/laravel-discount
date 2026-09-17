@@ -7,6 +7,7 @@ use Binafy\LaravelDiscount\Console\Commands\GenerateDiscountCodesCommand;
 use Binafy\LaravelDiscount\Console\Commands\PruneDiscountsCommand;
 use Binafy\LaravelDiscount\DiscountManager;
 use Binafy\LaravelDiscount\Integrations\LaravelCart\CartDiscount;
+use Binafy\LaravelDiscount\Support\ConditionFactory;
 use Binafy\LaravelDiscount\Support\DiscountCodeGenerator;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
@@ -23,6 +24,7 @@ class LaravelDiscountServiceProvider extends ServiceProvider
 
         $this->app->singleton(DiscountManager::class);
         $this->app->singleton(DiscountCodeGenerator::class);
+        $this->app->singleton(ConditionFactory::class);
 
         // Optional binafy/laravel-cart integration
         if (class_exists(Cart::class)) {
