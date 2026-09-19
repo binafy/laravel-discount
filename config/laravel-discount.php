@@ -37,6 +37,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Store Currency
+    |--------------------------------------------------------------------------
+    |
+    | A discount with a `currency` only applies to orders in that currency,
+    | since "10 off" means something different in EUR and in USD. Pass the
+    | order's currency as `payload: ['currency' => 'EUR']`; this is the
+    | currency assumed when you don't, so a single-currency store can set
+    | it once and forget it. Leave it null, and leave `currency` empty on
+    | your discounts, to ignore currencies altogether.
+    |
+    */
+    'currency' => env('DISCOUNT_CURRENCY'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Discount Usages Table
     |--------------------------------------------------------------------------
     |
