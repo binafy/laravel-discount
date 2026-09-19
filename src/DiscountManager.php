@@ -8,6 +8,7 @@ use Binafy\LaravelDiscount\Events\DiscountApplied;
 use Binafy\LaravelDiscount\Events\DiscountExpired;
 use Binafy\LaravelDiscount\Events\DiscountRedeemed;
 use Binafy\LaravelDiscount\Exceptions\DiscountConditionFailedException;
+use Binafy\LaravelDiscount\Exceptions\DiscountCurrencyMismatchException;
 use Binafy\LaravelDiscount\Exceptions\DiscountException;
 use Binafy\LaravelDiscount\Exceptions\DiscountExpiredException;
 use Binafy\LaravelDiscount\Exceptions\DiscountNotActiveException;
@@ -133,7 +134,8 @@ class DiscountManager
      * Ensure the discount is applicable, or throw a specific exception.
      *
      * `$quantity` and `$payload` describe the order being discounted and are
-     * handed to the discount's conditions; see `conditions.rules`.
+     * handed to the discount's conditions; see `conditions.rules`. The
+     * payload's `currency` is checked against the discount's currency.
      *
      * @param  array<string, mixed>  $payload
      *
@@ -170,16 +172,21 @@ class DiscountManager
             }
         }
 
+        $context = new DiscountContext($discount, $orderAmount, $user, $sessionId, $quantity, $payload);
+
+        // Checked before the minimum order value, which means nothing when
+        // the order total is counted in another currency.
+        if (! $discount->appliesToCurrency($context->currency())) {
+            throw DiscountCurrencyMismatchException::forCurrency($discount, $context->currency());
+        }
+
         if (! is_null($discount->min_order_value) && $orderAmount < (float) $discount->min_order_value) {
             throw MinimumOrderValueException::for($discount);
         }
 
         $this->validateConditions($discount);
 
-        $this->evaluateConditions(
-            $discount,
-            new DiscountContext($discount, $orderAmount, $user, $sessionId, $quantity, $payload)
-        );
+        $this->evaluateConditions($discount, $context);
     }
 
     /**
