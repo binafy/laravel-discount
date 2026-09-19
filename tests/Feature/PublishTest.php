@@ -5,11 +5,11 @@ use Illuminate\Support\Facades\File;
 afterEach(function () {
     File::delete(config_path('laravel-discount.php'));
 
-    foreach (File::glob(database_path('migrations/*_create_discount*.php')) as $file) {
-        File::delete($file);
-    }
-    foreach (File::glob(database_path('migrations/*_create_discountables_table.php')) as $file) {
-        File::delete($file);
+    // Every package migration, whatever timestamp its published copy was given.
+    foreach (File::glob(__DIR__.'/../../database/migrations/*.php') as $migration) {
+        $name = preg_replace('/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', basename($migration));
+
+        File::delete(File::glob(database_path('migrations/*_'.$name)));
     }
 });
 
@@ -27,5 +27,6 @@ test('migrations are publishable with the laravel-discount-migrations tag', func
 
     expect($published->contains(fn ($name) => str_contains($name, 'create_discounts_table')))->toBeTrue()
         ->and($published->contains(fn ($name) => str_contains($name, 'create_discount_usages_table')))->toBeTrue()
-        ->and($published->contains(fn ($name) => str_contains($name, 'create_discountables_table')))->toBeTrue();
+        ->and($published->contains(fn ($name) => str_contains($name, 'create_discountables_table')))->toBeTrue()
+        ->and($published->contains(fn ($name) => str_contains($name, 'add_currency_to_discounts_table')))->toBeTrue();
 });
