@@ -18,6 +18,7 @@ The `Laravel-Discount` is a Laravel package designed to handle discounts in your
 - Buy X Get Y: Run "buy 2, get 1 free" deals that price the free items automatically.
 - Tiered Discounts: Grow the discount with the order total, e.g. 5% over 1,000,000 and 10% over 5,000,000.
 - Free Shipping: Waive the shipping cost instead of deducting from the total.
+- Currencies: Bind a discount's amounts to a currency, so "10 off" never lands on an order priced in another.
 - Conditional Discounts: Set conditions for discounts, such as minimum order value or specific product categories.
 - Condition Engine: Store reusable rules on a discount — category, first purchase, minimum item count — or write your own.
 - Discount Codes: Generate and manage discount codes for your customers.
@@ -40,6 +41,7 @@ The `Laravel-Discount` is a Laravel package designed to handle discounts in your
     - [Percentage Discount](#percentage-discount)
     - [Fixed Amount Discount](#fixed-amount-discount)
     - [Maximum Discount Amount](#maximum-discount-amount)
+    - [Currency](#currency)
     - [Buy X Get Y](#buy-x-get-y)
     - [Tiered Discount](#tiered-discount)
     - [Free Shipping](#free-shipping)
@@ -123,6 +125,8 @@ Schema::table('discounts', function (Blueprint $table) {
 
 > On Laravel 10 and below, `->change()` requires `doctrine/dbal`.
 
+The [currency](#currency) column arrives as a migration of its own, so `php artisan migrate` adds it. If you published the migrations, publish them again first to pick up the new file.
+
 <a name="usage"></a>
 ## Usage
 
@@ -173,6 +177,43 @@ $discount = Discount::query()->create([
 
 LaravelDiscount::apply($discount, 300)->discountAmount;  // 60.0  (20% of 300)
 LaravelDiscount::apply($discount, 1000)->discountAmount; // 100.0 (capped)
+```
+
+<a name="currency"></a>
+#### Currency
+
+A fixed amount means nothing without its currency: 10 off is a gift on a 50 EUR order and a rounding error on a 500,000 IRR one. Give a discount a `currency` and it only applies to orders in that currency. The currency covers every amount on the discount — a fixed `value`, `max_discount_amount` and `min_order_value` alike:
+
+```php
+$discount = Discount::query()->create([
+    'code' => 'EURO10',
+    'type' => DiscountType::Fixed,
+    'value' => 10,
+    'currency' => 'EUR', // ISO 4217, stored upper case
+]);
+```
+
+Tell the manager which currency the order is in through the payload:
+
+```php
+LaravelDiscount::applyCode('EURO10', 50, $user, payload: ['currency' => 'EUR']); // OK
+LaravelDiscount::applyCode('EURO10', 50, $user, payload: ['currency' => 'USD']);
+// throws DiscountCurrencyMismatchException: "This discount is only available for orders in EUR."
+```
+
+A store that sells in one currency can say so once, in the config file or `.env`, and skip the payload:
+
+```php
+// config/laravel-discount.php
+'currency' => env('DISCOUNT_CURRENCY'), // e.g. DISCOUNT_CURRENCY=EUR
+```
+
+A discount without a currency fits every order, which is the default — a store that never sells abroad can ignore this section entirely. The reverse is strict on purpose: a discount priced in EUR is refused when the order's currency is not known at all, rather than guessed. Nothing is converted; to run the same promotion in two currencies, create one discount per currency.
+
+To list the discounts a customer could use in their currency, including the currency-free ones:
+
+```php
+Discount::query()->valid()->forCurrency('EUR')->get();
 ```
 
 <a name="buy-x-get-y"></a>
@@ -762,6 +803,7 @@ Every failure case has its own exception, all extending `Binafy\LaravelDiscount\
 | `MinimumOrderValueException`         | The order total is below `min_order_value`     |
 | `InvalidDiscountConditionsException` | A "buy X get Y", tiered, or condition rule is misconfigured |
 | `DiscountConditionFailedException`   | The order does not meet the discount's conditions |
+| `DiscountCurrencyMismatchException`  | The order is in another currency than the discount, or its currency is unknown |
 
 Each exception carries the discount that failed, so you can handle every case separately:
 

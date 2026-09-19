@@ -30,6 +30,17 @@ class DiscountContext
     }
 
     /**
+     * The order's ISO 4217 currency code: the payload's `currency`, falling
+     * back to the store currency in the config file, or null when neither says.
+     */
+    public function currency(): ?string
+    {
+        $currency = $this->payload['currency'] ?? config('laravel-discount.currency');
+
+        return filled($currency) ? strtoupper($currency) : null;
+    }
+
+    /**
      * The items the order is made of, as passed in the payload. Conditions
      * that inspect the basket (categories, for example) read this.
      *

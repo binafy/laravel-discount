@@ -4,6 +4,7 @@ namespace Binafy\LaravelDiscount\Models;
 
 use Binafy\LaravelDiscount\Enums\DiscountType;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -17,6 +18,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $code
  * @property DiscountType $type
  * @property string $value
+ * @property string|null $currency ISO 4217 code of the amounts above; null means any currency.
  * @property string|null $max_discount_amount Cap for the calculated discount, e.g. "20% but at most 100".
  * @property string|null $min_order_value
  * @property array|null $conditions Extra configuration, e.g. the "buy X get Y" deal or the tier ladder.
@@ -37,6 +39,7 @@ use Illuminate\Support\Carbon;
  * @method static Builder|Discount withRemainingUsages()
  * @method static Builder|Discount valid()
  * @method static Builder|Discount ofType(DiscountType|string $type)
+ * @method static Builder|Discount forCurrency(?string $currency)
  */
 class Discount extends Model
 {
@@ -51,6 +54,7 @@ class Discount extends Model
         'code',
         'type',
         'value',
+        'currency',
         'max_discount_amount',
         'min_order_value',
         'conditions',
@@ -101,6 +105,16 @@ class Discount extends Model
     public function getTable(): string
     {
         return config('laravel-discount.discounts.table', 'discounts');
+    }
+
+    /**
+     * Currency codes are stored upper case, so "eur" and "EUR" are one currency.
+     */
+    protected function currency(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $value) => filled($value) ? strtoupper(trim($value)) : null,
+        );
     }
 
     /*
@@ -185,6 +199,19 @@ class Discount extends Model
     }
 
     /**
+     * Scope the query to discounts usable in the given currency: those priced
+     * in it, and those bound to no currency at all.
+     */
+    public function scopeForCurrency(Builder $query, ?string $currency): Builder
+    {
+        return $query->where(function (Builder $query) use ($currency) {
+            $query
+                ->whereNull('currency')
+                ->when(filled($currency), fn (Builder $query) => $query->orWhere('currency', strtoupper($currency)));
+        });
+    }
+
+    /**
      * Scope the query to discounts that are currently applicable:
      * active, inside their time window, and not exhausted.
      */
@@ -192,12 +219,6 @@ class Discount extends Model
     {
         return $query->active()->started()->notExpired()->withRemainingUsages();
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Helpers
-    |--------------------------------------------------------------------------
-    */
 
     /**
      * Determine if the discount's start date has passed (or is not set).
@@ -216,12 +237,19 @@ class Discount extends Model
     }
 
     /**
-     * Determine if the discount grants free shipping rather than
-     * deducting an amount.
+     * Determine if the discount grants free shipping rather than deducting an amount.
      */
     public function isFreeShipping(): bool
     {
         return $this->type === DiscountType::FreeShipping;
+    }
+
+    /**
+     * Determine if the discount can be used on an order in the given currency.
+     */
+    public function appliesToCurrency(?string $currency): bool
+    {
+        return is_null($this->currency) || (filled($currency) && strtoupper($currency) === $this->currency);
     }
 
     /**
