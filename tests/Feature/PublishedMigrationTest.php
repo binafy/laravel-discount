@@ -17,8 +17,11 @@ function publishDiscountMigrations(): void
 }
 
 afterEach(function () {
-    foreach (File::glob(database_path('migrations/*_create_discount*.php')) as $file) {
-        File::delete($file);
+    // Every package migration, whatever timestamp its published copy was given.
+    foreach (File::glob(__DIR__.'/../../database/migrations/*.php') as $migration) {
+        $name = preg_replace('/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', basename($migration));
+
+        File::delete(File::glob(database_path('migrations/*_'.$name)));
     }
 });
 
@@ -34,6 +37,8 @@ test('published migrations are not run a second time from the package', function
     expect(Schema::hasTable('discounts'))->toBeTrue()
         ->and(Schema::hasTable('discount_usages'))->toBeTrue()
         ->and(Schema::hasTable('discountables'))->toBeTrue();
+
+    expect(Schema::hasColumn('discounts', 'currency'))->toBeTrue();
 
     $ran = DB::table('migrations')->pluck('migration')
         ->filter(fn ($migration) => str_contains($migration, 'create_discounts_table'));
