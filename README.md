@@ -74,8 +74,8 @@ The `Laravel-Discount` is a Laravel package designed to handle discounts in your
 <a name="requirements"></a>
 ## Requirements
 
-- PHP 8.1 or higher
-- Laravel 10.50.4, 11.56.1, 12.68.0, 13.27.0 or higher within each major
+- PHP 8.2 or higher
+- Laravel 12.69.0 or higher, or 13.30.0 or higher
 
 <a name="installation"></a>
 ## Installation
@@ -122,8 +122,6 @@ Schema::table('discounts', function (Blueprint $table) {
     $table->decimal('value', 10, 2)->default(0)->change();
 });
 ```
-
-> On Laravel 10 and below, `->change()` requires `doctrine/dbal`.
 
 The [currency](#currency) column arrives as a migration of its own, so `php artisan migrate` adds it. If you published the migrations, publish them again first to pick up the new file.
 

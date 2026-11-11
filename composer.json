@@ -53,12 +53,12 @@
         }
     },
     "require": {
-        "php": "^8.1",
-        "laravel/framework": "^10.50.4|^11.56.1|^12.68.0|^13.27.0"
+        "php": "^8.2",
+        "laravel/framework": "^12.69.0|^13.30.0"
     },
     "require-dev": {
-        "pestphp/pest-plugin-laravel": "^2.0.0|^3.0.0|^4.0.0",
-        "orchestra/testbench": "^8.0|^9.0|^10.0|^11.0",
+        "pestphp/pest-plugin-laravel": "^3.0.0|^4.0.0",
+        "orchestra/testbench": "^10.0|^11.0",
         "binafy/laravel-cart": "^2.1"
     },
     "extra": {
